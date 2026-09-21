@@ -1,683 +1,314 @@
-# Amazon EKS курс 2026: бесплатный курс по EKS и Kubernetes в AWS с нуля до production
+# AWS EKS курс 2026: бесплатный курс по Kubernetes на AWS с нуля до продакшена на русском
 
-![Amazon EKS](https://img.shields.io/badge/Amazon%20EKS-Kubernetes%201.36-FF9900?logo=amazonaws&logoColor=white)
-![Kubernetes](https://img.shields.io/badge/Kubernetes-1.36-326CE5?logo=kubernetes&logoColor=white)
-![AWS](https://img.shields.io/badge/AWS-cloud-orange?logo=amazonaws&logoColor=white)
-![Курс на русском](https://img.shields.io/badge/язык-русский-red)
-![Бесплатный курс](https://img.shields.io/badge/цена-бесплатно-brightgreen)
-![Junior → Senior](https://img.shields.io/badge/уровень-junior%20%E2%86%92%20senior-orange)
+Этот курс — практическое пошаговое погружение в Amazon EKS (Elastic Kubernetes Service): от объяснения "зачем это вообще нужно" до продакшен-архитектуры, автоскейлинга, безопасности и итогового проекта.
 
-> **Полный бесплатный курс по Amazon EKS на русском языке.** Kubernetes, AWS, VPC, IAM, EKS Auto Mode, Managed Node Groups, Pod Identity, EBS/EFS, ALB/NLB, HPA, Karpenter, NetworkPolicy, Secrets, observability, Helm, Terraform, GitOps, CI/CD, upgrades, troubleshooting, cost optimization и production-архитектура.
->
-> Всё в одном README: теория, схемы, YAML, AWS CLI, `kubectl`, `eksctl`, Helm, Terraform, типичные ошибки, практические задания и вопросы для самопроверки.
->
-> **Актуальность:** примеры ориентированы на Amazon EKS и Kubernetes **1.36**; на момент подготовки курса версии `1.36`, `1.35` и `1.34` находятся в standard support EKS. Перед лабораторной всегда проверяй актуальную матрицу поддерживаемых версий в официальной документации AWS.
-
-> ⚠️ **Стоимость:** EKS, EC2, NAT Gateway, Load Balancer, EBS/EFS, CloudWatch и другие AWS-ресурсы могут тарифицироваться. Лаборатории с кластером запускай осознанно и удаляй ресурсы после практики.
-
-⭐ Если курс полезен, поставь звезду репозиторию — так его найдут другие инженеры.
-
----
+Курс написан так, чтобы его можно было проходить последовательно, модуль за модулем, копируя команды и запуская их у себя.
 
 ## Для кого этот курс по EKS
 
-| Кто ты | Что получишь |
-|---|---|
-| **Новичок в Kubernetes** | Поймёшь Pods, Deployments, Services, ConfigMaps, Secrets, Ingress и RBAC на реальном AWS-кластере |
-| **Backend-разработчик** | Научишься деплоить сервисы в EKS, подключать S3/RDS/Secrets и работать с autoscaling |
-| **DevOps / Platform Engineer** | Поймёшь полный lifecycle EKS: networking, IAM, node groups, upgrades, add-ons, observability и security |
-| **SRE** | Получишь практику HA, PDB, topology spread, HPA, Karpenter, диагностики и disaster recovery |
-| **Cloud Engineer** | Свяжешь Kubernetes с VPC, IAM, ELB, EBS, EFS, KMS, Route 53, CloudWatch и ECR |
-| **Terraform Engineer** | Построишь EKS как код и научишься отделять инфраструктуру от Kubernetes-манифестов |
-| **Готовишься к собеседованию** | Получишь набор вопросов уровня junior / middle / senior и production-сценарии |
-| **Архитектор / Tech Lead** | Научишься выбирать между Auto Mode, Managed Node Groups, Karpenter, ALB/NLB, EBS/EFS и разными моделями доступа |
+- Для бэкенд- и DevOps-инженеров, которые работают с Kubernetes, но ни разу не разворачивали его в AWS
+- Для тех, кто уже знает `kubectl` и голый Kubernetes (kind/minikube), но не понимает, чем EKS отличается от "просто кластера"
+- Для инженеров, которые администрируют self-managed Kubernetes и хотят разобраться, что EKS берёт на себя, а что остаётся на вас
+- Для SRE, которым нужно быстро закрыть пробелы перед продакшен-эксплуатацией EKS
+- Для тех, кто готовится к собеседованию, где спрашивают про EKS, IRSA, Karpenter, VPC CNI
+
+Курс не рассчитан на людей, которые вообще не знакомы с Kubernetes и Docker — базовые понятия (под, деплоймент, сервис, namespace) здесь не объясняются с нуля.
 
 ## Что ты будешь уметь после курса
 
-- объяснить архитектуру EKS: control plane, API server, etcd, scheduler, nodes, kubelet, controllers;
-- объяснить, что AWS управляет в EKS, а что остаётся на стороне клиента;
-- создать кластер через `eksctl` и понять, какие AWS-ресурсы были созданы;
-- развернуть кластер в VPC с public/private subnets и несколькими Availability Zones;
-- понимать работу Amazon VPC CNI и связь Kubernetes Pod IP с VPC;
-- пользоваться EKS Auto Mode и понимать, чем он отличается от классической модели EKS;
-- создавать и обновлять Managed Node Groups;
-- деплоить приложения через Deployment, Service, ConfigMap и Secret;
-- понимать `requests`, `limits`, probes, ReplicaSet и rollout;
-- управлять доступом через EKS Access Entries, Kubernetes RBAC и IAM;
-- выдавать AWS permissions Pod'ам через EKS Pod Identity и понимать legacy IRSA;
-- подключать EBS CSI и EFS CSI для stateful workloads;
-- публиковать сервисы через AWS Load Balancer Controller, ALB и NLB;
-- понимать разницу между `ClusterIP`, `NodePort`, `LoadBalancer`, Ingress и Gateway;
-- настраивать HPA и понимать связь autoscaling с metrics;
-- использовать Karpenter и проектировать NodePool под реальные workload'ы;
-- обеспечивать HA через PDB, topology spread, anti-affinity и multi-AZ deployment;
-- строить NetworkPolicy и понимать границы между SG, NetworkPolicy и IAM;
-- шифровать Kubernetes API data и Secrets с AWS KMS;
-- собирать логи, метрики и трассировки через CloudWatch / Prometheus / OpenTelemetry;
-- использовать Helm, Terraform, Kustomize и GitOps;
-- строить CI/CD: GitHub Actions → ECR → EKS;
-- выполнять безопасные upgrade'ы Kubernetes и node groups;
-- диагностировать `Pending`, `CrashLoopBackOff`, `ImagePullBackOff`, DNS, CNI, IAM и LB-проблемы;
-- оптимизировать стоимость и планировать capacity;
-- проектировать production EKS-платформу с security, observability, autoscaling и DR.
-
----
+- Поднимать кластер EKS через `eksctl` и через Terraform, понимать, что создаётся под капотом
+- Разбираться в архитектуре EKS: control plane, managed node groups, self-managed узлы, Fargate
+- Настраивать сеть: VPC CNI, security groups для подов, Load Balancer Controller, Ingress
+- Настраивать доступ подов к AWS-сервисам через IRSA и EKS Pod Identity — без ключей в коде
+- Подключать постоянное хранилище через EBS CSI и EFS CSI драйверы
+- Настраивать автоскейлинг узлов (Cluster Autoscaler, Karpenter) и подов (HPA, VPA)
+- Строить observability: CloudWatch Container Insights, Prometheus + Grafana
+- Настраивать CI/CD: ECR, GitHub Actions, ArgoCD (GitOps)
+- Работать с секретами через Secrets Manager и External Secrets Operator
+- Обновлять кластер без даунтайма и проводить disaster recovery через Velero
+- Закрывать базовую безопасность: Pod Security Standards, Network Policies, GuardDuty for EKS
+- Считать и оптимизировать стоимость кластера
+- Понимать типичные вопросы с собеседований по EKS и уверенно на них отвечать
 
 ## Содержание
 
-- [Для кого этот курс по EKS](#для-кого-этот-курс-по-eks)
-- [Что ты будешь уметь после курса](#что-ты-будешь-уметь-после-курса)
-- [Как проходить курс](#как-проходить-курс)
-- [Правила и переменные лабораторий](#правила-и-переменные-лабораторий)
-- [Модуль 0. Что такое EKS и зачем он нужен](#модуль-0-что-такое-eks-и-зачем-он-нужен)
-- [Модуль 1. Kubernetes внутри EKS](#модуль-1-kubernetes-внутри-eks)
-- [Модуль 2. AWS CLI, eksctl, kubectl, Helm и Terraform](#модуль-2-aws-cli-eksctl-kubectl-helm-и-terraform)
-- [Модуль 3. AWS networking: VPC, subnets, AZ и VPC CNI](#модуль-3-aws-networking-vpc-subnets-az-и-vpc-cni)
-- [Модуль 4. Создание EKS: Auto Mode и классический EKS](#модуль-4-создание-eks-auto-mode-и-классический-eks)
-- [Модуль 5. Workloads: Pod, Deployment, Service, ConfigMap, Secret](#модуль-5-workloads-pod-deployment-service-configmap-secret)
-- [Модуль 6. IAM и доступ к кластеру: Access Entries и RBAC](#модуль-6-iam-и-доступ-к-кластеру-access-entries-и-rbac)
-- [Модуль 7. IAM для Pod'ов: EKS Pod Identity и IRSA](#модуль-7-iam-для-подов-eks-pod-identity-и-irsa)
-- [Модуль 8. Storage: EBS, EFS, PVC и Stateful workloads](#модуль-8-storage-ebs-efs-pvc-и-stateful-workloads)
-- [Модуль 9. Networking приложений: Service, ALB, NLB и Ingress](#модуль-9-networking-приложений-service-alb-nlb-и-ingress)
-- [Модуль 10. Scheduling: requests, limits, probes, taints, affinity](#модуль-10-scheduling-requests-limits-probes-taints-affinity)
-- [Модуль 11. Scaling: HPA, Karpenter, Managed Node Groups и Auto Mode](#модуль-11-scaling-hpa-karpenter-managed-node-groups-и-auto-mode)
-- [Модуль 12. High Availability и graceful disruptions](#модуль-12-high-availability-и-graceful-disruptions)
-- [Модуль 13. Security: Pod Security, NetworkPolicy, SG, KMS](#модуль-13-security-pod-security-networkpolicy-sg-kms)
-- [Модуль 14. Observability: logs, metrics, events, traces](#модуль-14-observability-logs-metrics-events-traces)
-- [Модуль 15. Helm, Kustomize и GitOps](#модуль-15-helm-kustomize-и-gitops)
-- [Модуль 16. CI/CD: GitHub Actions, ECR и deploy в EKS](#модуль-16-cicd-github-actions-ecr-и-deploy-в-eks)
-- [Модуль 17. Lifecycle: add-ons, upgrades и node maintenance](#модуль-17-lifecycle-add-ons-upgrades-и-node-maintenance)
-- [Модуль 18. Troubleshooting и production diagnostics](#модуль-18-troubleshooting-и-production-diagnostics)
-- [Модуль 19. Production architecture и итоговый проект](#модуль-19-production-architecture-и-итоговый-проект)
-- [Шпаргалка AWS CLI + EKS](#шпаргалка-aws-cli--eks)
-- [Шпаргалка kubectl](#шпаргалка-kubectl)
-- [Шпаргалка Helm](#шпаргалка-helm)
-- [Шпаргалка диагностики](#шпаргалка-диагностики)
-- [Вопросы на собеседовании по EKS](#вопросы-на-собеседовании-по-eks)
-- [FAQ](#faq)
-- [Глоссарий EKS](#глоссарий-eks)
-- [Официальные источники](#официальные-источники)
-
----
+- Модуль 0. Что такое EKS и зачем он нужен
+- Модуль 1. Архитектура EKS: control plane, узлы, VPC
+- Модуль 2. Установка: eksctl, kubectl, первый кластер
+- Модуль 3. Kubernetes-объекты глазами EKS: namespace, deployment, service
+- Модуль 4. Node groups: Managed, Self-managed, Fargate
+- Модуль 5. Сеть в EKS: VPC CNI, security groups, ENI
+- Модуль 6. IAM и EKS: IRSA и Pod Identity
+- Модуль 7. Хранилище: EBS CSI, EFS CSI, StorageClass
+- Модуль 8. Автоскейлинг: Cluster Autoscaler, Karpenter, HPA/VPA
+- Модуль 9. Ingress и балансировка: AWS Load Balancer Controller
+- Модуль 10. Логи и метрики: CloudWatch, Prometheus, Grafana
+- Модуль 11. CI/CD: ECR, GitHub Actions, ArgoCD
+- Модуль 12. Секреты и конфигурация
+- Модуль 13. Multi-cluster и мульти-аккаунт
+- Модуль 14. Обновление и обслуживание кластера
+- Модуль 15. Стоимость и оптимизация
+- Модуль 16. Безопасность EKS
+- Модуль 17. Disaster recovery и backup
+- Модуль 18. EKS в продакшене: чек-лист
+- Модуль 19. Итоговый проект: развёртывание микросервисного приложения
+- Шпаргалка eksctl / kubectl / IAM
+- Вопросы на собеседовании по EKS с ответами
+- FAQ: частые вопросы про EKS
+- Глоссарий EKS
+- Официальные источники и что читать дальше
 
 ## Как проходить курс
 
-1. **Не пропускай Kubernetes-базу.** EKS — это managed Kubernetes, а не отдельная версия Kubernetes.
-2. **Выполняй команды руками.** Один час лаборатории полезнее трёх часов чтения.
-3. **Ломай кластер безопасно.** Удали Pod, уменьши replicas, сделай rollout, посади Pod в `Pending`, посмотри events.
-4. **Проверяй, где заканчивается Kubernetes и начинается AWS.** Это главный навык EKS-инженера.
-5. **Делай заметки по каждой ошибке.** Production-знания появляются из диагностики.
-6. **Иди до итогового проекта.** В нём темы соединятся в одну архитектуру.
-
-### Что нужно установить
-
-Для Linux/macOS/WSL2:
-
-- AWS CLI v2;
-- `kubectl`;
-- `eksctl`;
-- Helm 3;
-- Git;
-- Docker;
-- Terraform;
-- `jq` желательно;
-- IDE с YAML/Kubernetes поддержкой.
-
-Официальный путь AWS для старта рекомендует подготовить AWS CLI, `kubectl`, `eksctl`, а Helm — как удобный package manager для Kubernetes-инструментов. https://docs.aws.amazon.com/eks/latest/userguide/setting-up.html
-
----
-
-## Правила и переменные лабораторий
-
-Во всех командах используем переменные:
-
-```bash
-export AWS_REGION=eu-central-1
-export CLUSTER_NAME=eks-course
-export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-```
-
-Проверка:
-
-```bash
-aws sts get-caller-identity
-aws eks list-clusters --region "$AWS_REGION"
-eksctl version
-kubectl version --client
-helm version
-terraform version
-```
-
-> `eu-central-1` выбран только как пример. Используй регион, доступный в твоём аккаунте, с нужными типами EC2 и EKS-функциями.
-
-### Полезная привычка
-
-Перед любой лабораторией сначала смотри контекст:
-
-```bash
-aws configure list
-aws sts get-caller-identity
-aws eks list-clusters --region "$AWS_REGION"
-kubectl config current-context
-```
-
-Это спасает от классической ошибки: **«я удалил не тот кластер»**.
+1. Читай модуль целиком, не пропуская объяснения "зачем", а не только "как"
+2. Выполняй команды из модуля в своём AWS-аккаунте (лучше в отдельном sandbox-аккаунте или с бюджетным алертом — EKS control plane платный)
+3. Делай "Практику" в конце модуля — без неё материал не закрепится
+4. Отвечай на "Вопросы для самопроверки", не подглядывая — если не получилось, вернись и перечитай раздел
+5. Не пытайся выучить весь курс за один день — модуль в день/два вполне нормальный темп
 
 ---
 
 # Модуль 0. Что такое EKS и зачем он нужен
 
-## 0.1 EKS простыми словами
+## 0.1 Определение EKS простыми словами
 
-Amazon Elastic Kubernetes Service — управляемый Kubernetes от AWS. AWS берёт на себя управление Kubernetes control plane, а клиент выбирает, как организовать data plane и инфраструктуру вокруг workload'ов. В текущем EKS доступны как классический EKS, так и EKS Auto Mode. https://docs.aws.amazon.com/eks/latest/userguide/what-is-eks.html
+Amazon EKS (Elastic Kubernetes Service) — это управляемый Kubernetes от AWS. AWS берёт на себя control plane: `kube-apiserver`, `etcd`, `kube-scheduler`, `kube-controller-manager` — разворачивает их в высокодоступной конфигурации, патчит, бэкапит `etcd`, следит, чтобы API сервер отвечал.
 
-Главная идея:
+Вы, в свою очередь, отвечаете за:
+- worker-узлы (если не используете Fargate) — их ОС, патчи, kubelet
+- то, что вы на этот кластер накатываете — деплойменты, конфигурацию, сеть подов
+- интеграцию с остальным AWS: IAM, VPC, ELB, EBS, CloudWatch
 
-```text
-                         AWS account
-                              |
-                    +---------+---------+
-                    |                   |
-             EKS control plane      Data plane
-              managed by AWS        depends on mode
-                    |                   |
-        +-----------+-----------+      +----------------+
-        | API server            |      | EC2 nodes       |
-        | Scheduler             |      | or Auto Mode    |
-        | Controllers            |      | compute         |
-        | etcd                  |      +----------------+
-        +-----------+-----------+
-                    |
-             Kubernetes API
-                    |
-             Pods / Services
+EKS — это не "свой Kubernetes", это "Kubernetes API, за инфраструктуру которого частично отвечает AWS".
+
+## 0.2 Проблема, которую решает EKS
+
+Если разворачивать Kubernetes самостоятельно (kubeadm на EC2), вам придётся отдельно решать:
+
+- Как сделать `etcd` отказоустойчивым и научиться его бэкапить
+- Как обновлять control plane без простоя API
+- Как выдавать сертификаты и ротировать их
+- Как интегрировать кластер с IAM, VPC, Load Balancer'ами AWS — вручную, через collections костылей
+- Как патчить control plane при новых CVE в Kubernetes
+
+Каждая из этих задач — не "один раз настроил и забыл", а постоянная операционная нагрузка. EKS снимает её с control plane и даёт готовую интеграцию с остальным AWS "из коробки" через официальные аддоны.
+
+## 0.3 Как выглядит система без EKS и с EKS
+
+**Без EKS (self-managed kubeadm-кластер на EC2):**
+
+```
+[Вы отвечаете за всё]
+  EC2 (control plane x3) --- etcd (бэкапы, TLS, апгрейды — вручную)
+  EC2 (worker nodes)     --- kubelet, CNI, патчи ОС — вручную
+  Балансировщик до kube-apiserver — вручную
+  Интеграция с IAM для подов — самописный webhook (kiam/kube2iam) или ничего
 ```
 
-## 0.2 Что EKS решает
+**С EKS:**
 
-Без managed Kubernetes тебе нужно самостоятельно проектировать и обслуживать:
-
-- control plane;
-- etcd;
-- API server;
-- scheduler/controllers;
-- certificates;
-- upgrades control plane;
-- часть security hardening;
-- HA control plane.
-
-С EKS AWS управляет control plane и интегрирует Kubernetes с AWS services.
-
-## 0.3 EKS и обычный Kubernetes
-
-| Объект | Vanilla Kubernetes | EKS |
-|---|---|---|
-| API Server | Ты управляешь | AWS управляет |
-| etcd | Ты управляешь | AWS управляет |
-| Scheduler | Ты управляешь | AWS управляет |
-| Worker nodes | Ты управляешь | MNG / Auto Mode / self-managed и др. |
-| IAM | Внешний к Kubernetes | Глубокая AWS-интеграция |
-| VPC networking | зависит от CNI | AWS VPC CNI — основной AWS CNI |
-| Load Balancer | зависит от облака | AWS Load Balancer Controller / Auto Mode |
-| Storage | CSI drivers | EBS/EFS CSI и Auto Mode capabilities |
-
-## 0.4 Главный принцип EKS
-
-**Kubernetes отвечает за desired state. AWS отвечает за AWS-ресурсы, на которые Kubernetes опирается.**
-
-Например:
-
-```yaml
-apiVersion: v1
-kind: Service
-metadata:
-  name: api
-spec:
-  type: LoadBalancer
+```
+[AWS отвечает]                        [Вы отвечаете]
+  Managed control plane                 Worker nodes (EC2) или Fargate
+  Multi-AZ etcd, бэкапы, патчи          Приложения, манифесты
+  Managed API endpoint + TLS            Аддоны, конфигурация сети
+                                         IAM-роли для подов (IRSA)
 ```
 
-Kubernetes создаёт объект Service, а controller превращает этот desired state в AWS Load Balancer.
+Работа с кластером через `kubectl` не меняется — EKS отдаёт стандартный Kubernetes API. Разница именно в том, кто и что администрирует под капотом.
 
-## 0.5 Где EKS подходит плохо
+## 0.4 EKS vs самостоятельный Kubernetes vs ECS
 
-EKS не обязательно нужен для:
+| | EKS | Self-managed K8s | ECS |
+|---|---|---|---|
+| Control plane | Управляет AWS | Управляете вы | Нет control plane K8s вообще |
+| API | Стандартный Kubernetes API | Стандартный Kubernetes API | Проприетарный API AWS |
+| Переносимость | Высокая (портируемые манифесты) | Высокая | Только AWS |
+| Экосистема | Весь helm/CNCF-стек | Весь helm/CNCF-стек | Только то, что сделал AWS |
+| Порог входа | Нужно знать Kubernetes | Нужно знать Kubernetes + инфру control plane | Ниже, проще для простых сервисов |
 
-- одного маленького приложения на одном сервере;
-- простого cron workload;
-- приложения, которое удобно запускать как AWS Lambda;
-- сервиса без потребности в Kubernetes ecosystem.
+EKS выбирают, когда команда уже инвестировала в Kubernetes-экосистему (Helm, операторы, CNCF-тулинг) и хочет портируемость между облаками, при этом не хочет самостоятельно тащить control plane.
 
-Kubernetes ценен, когда нужны стандартизация deployment, self-healing, scheduling, autoscaling, service discovery и большая платформа для множества workload'ов.
+## 0.5 Что такое control plane и data plane в терминах EKS
 
-### Практика
+- **Control plane** — управляемая AWS часть: API server, etcd, scheduler, controller-manager. Живёт в отдельном AWS-managed VPC, вы её не видите как EC2-инстансы.
+- **Data plane** — ваши worker-узлы (EC2 managed/self-managed node groups) или Fargate-поды. Именно здесь реально исполняются ваши контейнеры.
 
-1. Нарисуй свою архитектуру приложения без Kubernetes.
-2. Отметь, что тебе нужно для self-healing.
-3. Отметь, что потребуется для rolling update.
-4. Сравни это с возможностями Deployment + Service.
+## 0.6 Что такое EKS Add-ons
 
-### Типичные ошибки
+EKS Add-ons — это официально поддерживаемые AWS компоненты кластера, которые устанавливаются и обновляются через EKS API, а не через `kubectl apply`/Helm вручную. Примеры: `vpc-cni`, `coredns`, `kube-proxy`, `aws-ebs-csi-driver`, `eks-pod-identity-agent`. Это снижает операционную нагрузку — AWS следит за совместимостью версий аддона и версии control plane.
 
-- считать EKS обычным EC2-сервером;
-- думать, что AWS управляет всем Kubernetes workload'ом автоматически;
-- забывать, что EC2/EBS/ELB/NAT могут стоить денег;
-- не различать control plane и data plane.
+## 0.7 EKS vs EKS Anywhere vs EKS on Outposts
 
-### Вопросы
+- **EKS** — control plane в облаке AWS, узлы в облаке (или Fargate)
+- **EKS Anywhere** — тот же Kubernetes-дистрибутив AWS, но control plane и узлы у вас на своём железе (on-prem, без обязательной связи с AWS control plane)
+- **EKS on Outposts** — control plane в AWS, узлы физически стоят у вас (AWS Outposts), для сценариев с низкой задержкой или требованиями по локализации данных
 
-1. Что именно AWS управляет в control plane EKS?
-2. Чем EKS отличается от запуска k3s на EC2?
-3. Кто отвечает за приложение внутри Pod?
-4. Что в EKS остаётся вашей зоной ответственности?
+В этом курсе речь именно про "классический" EKS в облаке AWS.
+
+## 0.8 Где используют EKS: реальные сценарии
+
+- Микросервисные бэкенды с десятками сервисов, где нужна гибкость Kubernetes-экосистемы (Helm-чарты, операторы для баз данных, service mesh)
+- ML/AI пайплайны — обучение и инференс моделей на GPU-нодах с автоскейлингом
+- Batch-обработка данных с Fargate или Karpenter под спот-инстансы
+- Мультитенантные SaaS-платформы, где namespace + network policy изолируют клиентов
+- Компании, которые хотят единый Kubernetes API поверх нескольких облаков/on-prem
+
+## 0.9 Когда EKS не нужен
+
+- У вас один простой монолитный сервис — дешевле и проще App Runner, Elastic Beanstalk или ECS Fargate
+- Команда никогда не работала с Kubernetes, а сроки горят — кривая обучения Kubernetes сама по себе немаленькая, EKS её не убирает
+- Бюджет крайне ограничен, а нагрузка низкая — постоянная плата за control plane (см. модуль 15) может быть неоправданна для одного маленького сервиса
+
+## 0.10 Что EKS НЕ делает за вас
+
+- Не патчит ОС ваших worker-узлов автоматически (если это не Fargate или Bottlerocket с managed-обновлениями через отдельный механизм)
+- Не настраивает сеть подов и security groups за вас — базовые правила придётся продумать самим
+- Не даёт автоскейлинг из коробки — Cluster Autoscaler/Karpenter и HPA нужно ставить и настраивать отдельно
+- Не решает вопросы стоимости — легко получить кластер с overprovisioned узлами, если не следить
+
+### Вопросы для самопроверки
+
+1. Что именно берёт на себя AWS в модели EKS, а что остаётся на вас?
+2. Чем EKS отличается от ECS с точки зрения API?
+3. Что такое EKS Add-ons и зачем они нужны, если можно поставить то же самое через Helm?
+4. В каком сценарии EKS — избыточное решение?
 
 ---
 
-# Модуль 1. Kubernetes внутри EKS
+# Модуль 1. Архитектура EKS: control plane, узлы, VPC
 
-## 1.1 Архитектура Kubernetes
+## 1.1 Общая картина
 
-```text
-                 kubectl / CI / Argo CD
-                          |
-                          v
-                   +-------------+
-                   | API Server   |
-                   +------+-------+
-                          |
-             +------------+------------+
-             |                         |
-        Scheduler                 Controllers
-             |                         |
-             +------------+------------+
-                          |
-                     desired state
-                          |
-                    +-----+-----+
-                    |  kubelet  |
-                    +-----+-----+
-                          |
-                       container
+```
+                    ┌─────────────────────────────┐
+                    │   EKS Control Plane (AWS)    │
+                    │  kube-apiserver (multi-AZ)   │
+                    │  etcd (managed, зашифрован)  │
+                    │  scheduler / controller-mgr  │
+                    └──────────────┬───────────────┘
+                                   │ ENI в вашем VPC
+                    ┌──────────────┴───────────────┐
+                    │           Ваш VPC             │
+        ┌───────────┴──────────┐      ┌────────────┴───────────┐
+        │  Private subnets      │      │   Public subnets       │
+        │  Managed node group   │      │   NAT Gateway,         │
+        │  Fargate profile      │      │   Load Balancer'ы      │
+        └────────────────────────┘      └─────────────────────────┘
 ```
 
-## 1.2 Основные сущности
+Control plane физически живёт в AWS-managed VPC, но подключается к вашему VPC через Elastic Network Interfaces (ENI), которые EKS создаёт в указанных вами подсетях. Именно поэтому при создании кластера вы обязаны указать subnets — control plane должен дотянуться до узлов.
 
-| Сущность | Для чего |
-|---|---|
-| Pod | минимальная единица запуска |
-| Deployment | декларативное управление stateless Pod'ами |
-| ReplicaSet | поддерживает количество Pod'ов |
-| Service | стабильная сеть для набора Pod'ов |
-| ConfigMap | конфигурация без секретов |
-| Secret | чувствительные значения |
-| Namespace | логическая изоляция |
-| Job | одноразовая задача |
-| CronJob | периодическая задача |
-| DaemonSet | Pod на каждом подходящем node |
-| StatefulSet | stateful workloads с identity и storage |
-| Ingress | L7 HTTP routing |
-| NetworkPolicy | L3/L4 ограничения между Pod'ами |
+## 1.2 Основные компоненты кластера EKS
 
-## 1.3 Desired state
+- **Control plane** — managed API server + etcd, endpoint приватный и/или публичный
+- **Node groups** — группы worker-узлов (managed или self-managed EC2)
+- **Fargate profiles** — бессерверные поды без EC2 вообще
+- **VPC CNI** — плагин, который выдаёт подам реальные IP из VPC
+- **CoreDNS** — DNS внутри кластера
+- **kube-proxy** — правила маршрутизации для Service
+- **IAM** — интеграция через OIDC provider кластера (для IRSA/Pod Identity)
+- **EKS Add-ons** — управляемые версии всего вышеперечисленного
 
-Ты не говоришь Kubernetes:
+## 1.3 VPC требования для EKS
 
-> «запусти Pod сейчас».
+Кластеру нужен VPC с:
+- Минимум 2 подсети в разных Availability Zones (рекомендуется 3)
+- Публичные подсети — если нужен публичный доступ (NAT Gateway, публичные Load Balancer'ы)
+- Приватные подсети — для worker-узлов (best practice: узлы не должны иметь публичные IP)
+- Достаточным количеством свободных IP — VPC CNI выдаёт под реальный IP из подсети, поэтому при большом количестве подов IP-пространство может закончиться быстрее, чем ожидаете
 
-Ты говоришь:
+## 1.4 Endpoint access: публичный, приватный, оба
 
-```yaml
-replicas: 3
-```
+Control plane endpoint (адрес, куда стучится `kubectl`) можно настроить тремя способами:
 
-И контроллер постоянно сравнивает фактическое состояние с желаемым.
+- **Public only** — доступ отовсюду по интернету (можно ограничить CIDR-блоками), узлы внутри VPC достают control plane через публичный интернет
+- **Private only** — доступ только из VPC (через VPN/Direct Connect/bastion), максимально безопасно, но `kubectl` с ноутбука напрямую не подключится
+- **Public + Private** — узлы общаются с control plane внутри VPC (низкая задержка, не через интернет), а разработчики подключаются через публичный endpoint (обычно ограниченный по IP)
 
-## 1.4 Self-healing
+Для продакшена почти всегда выбирают Public + Private с ограничением публичного доступа по allowlisted CIDR, либо чисто Private с доступом через VPN.
 
-Если Deployment требует 3 Pod'а, а один исчез:
+## 1.5 Availability Zones и отказоустойчивость
 
-```text
-desired = 3
-actual  = 2
-          |
-          v
-controller creates Pod
-          |
-desired = 3
-actual  = 3
-```
+AWS размещает control plane как минимум в 2 AZ автоматически. Ваша задача — растянуть worker-узлы минимум на 2-3 AZ, чтобы при падении одной зоны кластер продолжил работать. Это настраивается на уровне node group (список subnet'ов из разных AZ).
 
-## 1.5 Лаборатория: увидеть Kubernetes
+## 1.6 Версии Kubernetes в EKS
 
-```bash
-kubectl get nodes -o wide
-kubectl get ns
-kubectl get pods -A
-kubectl get deployments -A
-kubectl get svc -A
-```
+AWS поддерживает несколько последних минорных версий Kubernetes (стандартная поддержка — около 14 месяцев с релиза, затем можно продлить через Extended Support за дополнительную плату). Важно понимать:
 
-Посмотри labels:
+- Апгрейд control plane и апгрейд node group — раздельные операции
+- Нельзя пропускать более одной минорной версии за раз при апгрейде (1.28 → 1.29 → 1.30, не 1.28 → 1.30 напрямую)
+- Аддоны (VPC CNI, CoreDNS, kube-proxy) тоже привязаны к версии и их нужно обновлять synchронно с control plane
 
-```bash
-kubectl get nodes --show-labels
-```
+## 1.7 Ключевые лимиты кластера
 
-Посмотри системные компоненты:
+- До 100 нод по умолчанию в managed node group (можно увеличить через service quota)
+- Количество подов на узле ограничено типом инстанса (зависит от числа ENI и IP на ENI — это особенность VPC CNI, подробнее в модуле 5)
+- IP-адреса — самый частый практический лимит: если VPC/подсеть маленькая, а подов много, кластер упрётся в нехватку IP раньше, чем в лимиты CPU/памяти
 
-```bash
-kubectl get pods -n kube-system
-```
+## 1.8 Аккаунты и мультитенантность внутри кластера
 
-### Практика
+В одном EKS-кластере можно изолировать команды/окружения через:
+- `Namespace` — базовая логическая изоляция
+- `NetworkPolicy` — сетевая изоляция между namespace
+- `ResourceQuota` / `LimitRange` — ограничение ресурсов на namespace
+- IAM-роли через IRSA/Pod Identity — разные namespace получают разные права в AWS
 
-1. Найди CoreDNS.
-2. Найди `kube-proxy`, если он присутствует в твоей модели EKS.
-3. Найди VPC CNI.
-4. Удали один Pod приложения и посмотри, какой controller создаст замену.
+Полная жёсткая изоляция (как отдельные "аккаунты" в NATS) в Kubernetes сложнее — обычно для сильной мультитенантности делают отдельные кластеры на команду/окружение, а не один общий.
 
-### Вопросы
+## 1.9 Первая ментальная модель
 
-1. Почему Pod не является хорошей единицей долговременного deployment?
-2. Что делает Deployment?
-3. Зачем нужен Service, если Pod уже имеет IP?
-4. Как Kubernetes понимает, что Pod unhealthy?
+Думайте про EKS так: "это Kubernetes API, за здоровье которого отвечает AWS, а за то, что на этот API накатывается — отвечаете вы". Всё, что вы знаете про голый Kubernetes, работает и здесь. Специфика EKS — это стык между Kubernetes и остальным AWS: сеть (VPC CNI), права (IAM/IRSA), балансировка (ALB Controller), хранилище (EBS/EFS CSI), логи (CloudWatch).
+
+### Вопросы для самопроверки
+
+1. Через что control plane EKS общается с вашими worker-узлами?
+2. Чем отличается Public и Private endpoint access и когда какой выбирать?
+3. Почему нельзя перепрыгнуть через минорную версию Kubernetes при апгрейде?
+4. Какой ресурс в VPC чаще всего становится узким местом при масштабировании подов?
 
 ---
 
-# Модуль 2. AWS CLI, eksctl, kubectl, Helm и Terraform
+# Модуль 2. Установка: eksctl, kubectl, первый кластер
 
-## 2.1 AWS CLI
+## 2.1 Что понадобится
 
-Проверка identity:
-
-```bash
-aws sts get-caller-identity
-```
-
-Получаем account ID:
+- AWS CLI, настроенный с рабочими credentials (`aws configure`)
+- `kubectl`
+- `eksctl` — CLI-инструмент от Weaveworks/AWS, который оборачивает CloudFormation и сильно упрощает создание кластера
 
 ```bash
-aws sts get-caller-identity --query Account --output text
+# macOS
+brew install eksctl kubectl awscli
+
+# Linux
+curl -sLO "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_Linux_amd64.tar.gz"
+tar -xzf eksctl_Linux_amd64.tar.gz -C /tmp && sudo mv /tmp/eksctl /usr/local/bin
+
+curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
 ```
 
-Список EKS:
+## 2.2 Самый быстрый способ поднять кластер
 
 ```bash
-aws eks list-clusters --region "$AWS_REGION"
+eksctl create cluster \
+  --name demo-cluster \
+  --region eu-central-1 \
+  --version 1.30 \
+  --nodegroup-name standard-workers \
+  --node-type t3.medium \
+  --nodes 2 \
+  --nodes-min 1 \
+  --nodes-max 4 \
+  --managed
 ```
 
-Описание кластера:
+Эта одна команда создаст: VPC с публичными и приватными подсетями, control plane, managed node group на 2 EC2-инстанса, настроит IAM-роли, security groups и OIDC provider. Займёт это 15-20 минут — control plane разворачивается не мгновенно.
 
-```bash
-aws eks describe-cluster \
-  --name "$CLUSTER_NAME" \
-  --region "$AWS_REGION"
-```
+## 2.3 Создание кластера декларативно через конфиг-файл
 
-## 2.2 eksctl
-
-`eksctl` — CLI для работы с EKS, позволяющий создавать и управлять EKS-кластерами декларативно и через команды. AWS использует его в официальных getting started сценариях. https://docs.aws.amazon.com/eks/latest/userguide/getting-started-eksctl.html
-
-Проверка:
-
-```bash
-eksctl version
-```
-
-## 2.3 kubectl
-
-Проверка клиента:
-
-```bash
-kubectl version --client
-```
-
-Context:
-
-```bash
-kubectl config get-contexts
-kubectl config current-context
-```
-
-## 2.4 Helm
-
-```bash
-helm version
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm repo update
-```
-
-Helm полезен для сложных Kubernetes-приложений, но не должен скрывать понимание базовых YAML-манифестов.
-
-## 2.5 Terraform
-
-```bash
-terraform version
-terraform init
-terraform fmt
-terraform validate
-terraform plan
-```
-
-Общее разделение:
-
-```text
-Terraform
-  |
-  +--> VPC
-  +--> IAM
-  +--> EKS
-  +--> ECR
-  +--> KMS
-  +--> RDS
-  +--> S3
-
-GitOps / kubectl / Helm
-  |
-  +--> Namespace
-  +--> Deployment
-  +--> Service
-  +--> Ingress
-  +--> HPA
-```
-
-### Практика
-
-Создай файл `versions.sh`:
-
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-
-aws --version
-eksctl version
-kubectl version --client
-helm version --short
-terraform version
-```
-
-Запускай его перед лабораториями.
-
-### Типичные ошибки
-
-- `aws` смотрит не в тот профиль;
-- `kubectl` подключён к другому cluster context;
-- `eksctl` устарел;
-- chart repository не обновлён;
-- Terraform state хранится без стратегии locking/backup в production.
-
-### Вопросы
-
-1. Чем отличается `aws eks ...` от `kubectl ...`?
-2. Когда использовать `eksctl`, а когда Terraform?
-3. Что хранится в kubeconfig?
-4. Почему Helm не заменяет понимание Kubernetes API?
-
----
-
-# Модуль 3. AWS networking: VPC, subnets, AZ и VPC CNI
-
-## 3.1 Почему EKS networking сложнее Docker networking
-
-В AWS Pod может иметь IP-адрес из VPC благодаря Amazon VPC CNI. VPC CNI создаёт/использует ENI и выдаёт Pod'ам VPC addresses или prefixes. https://docs.aws.amazon.com/eks/latest/best-practices/vpc-cni.html
-
-```text
-                     VPC 10.0.0.0/16
-                           |
-          +----------------+----------------+
-          |                                 |
-       AZ-a                              AZ-b
-          |                                 |
-  private subnet                      private subnet
-          |                                 |
-      EC2 node                          EC2 node
-      10.0.1.10                         10.0.2.10
-          |                                 |
-      Pod 10.0.1.x                      Pod 10.0.2.x
-```
-
-## 3.2 Public и private subnets
-
-Типовая production-модель:
-
-```text
-Internet
-   |
- IGW
-   |
-public subnets
-   |
-ALB / NAT Gateway
-   |
-private subnets
-   |
-EKS nodes + Pods
-```
-
-Не обязательно всё должно быть доступно из интернета.
-
-## 3.3 Availability Zones
-
-Для HA workload лучше планировать несколько AZ:
-
-```text
-              Region
-     +----------+----------+
-     |                     |
-    AZ-a                  AZ-b
-     |                     |
-  nodes/pods            nodes/pods
-```
-
-Не надо размещать все replicas в одной AZ.
-
-## 3.4 Cluster endpoint
-
-EKS API server endpoint может быть public, private или комбинированно ограничен CIDR. AWS отдельно документирует private-only endpoint и private access внутри VPC. https://docs.aws.amazon.com/eks/latest/userguide/cluster-endpoint.html
-
-Посмотреть настройки:
-
-```bash
-aws eks describe-cluster \
-  --name "$CLUSTER_NAME" \
-  --region "$AWS_REGION" \
-  --query 'cluster.resourcesVpcConfig.{endpointPublicAccess:endpointPublicAccess,endpointPrivateAccess:endpointPrivateAccess,publicAccessCidrs:publicAccessCidrs}'
-```
-
-## 3.5 CNI и IP exhaustion
-
-Одна из типичных EKS-проблем:
-
-```text
-Pod не стартует
-  |
-  +--> Scheduler OK
-  |
-  +--> Node есть
-  |
-  +--> Но VPC CNI не может выдать IP
-```
-
-Проверки:
-
-```bash
-kubectl get pods -n kube-system -l k8s-app=aws-node
-kubectl describe ds aws-node -n kube-system
-kubectl get nodes -o wide
-```
-
-## 3.6 NetworkPolicy
-
-По умолчанию межpod-traffic не ограничен обычной Kubernetes NetworkPolicy моделью. В EKS VPC CNI поддерживает native network policy при соответствующей конфигурации. https://aws.github.io/aws-eks-best-practices/security/docs/network/
-
-Пример deny-by-default:
-
-```yaml
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: deny-all-ingress
-  namespace: shop
-spec:
-  podSelector: {}
-  policyTypes:
-    - Ingress
-```
-
-### Практика
-
-1. Найди subnet'ы кластера.
-2. Определи, какие subnet'ы public/private.
-3. Посмотри IP nodes.
-4. Сравни IP Pod и IP Node.
-5. Сделай NetworkPolicy только для тестового namespace и проверь traffic.
-
-### Вопросы
-
-1. Почему EKS Pod networking связан с VPC?
-2. Зачем private subnets для worker nodes?
-3. Чем security group отличается от NetworkPolicy?
-4. Что произойдёт при нехватке Pod IP?
-
----
-
-# Модуль 4. Создание EKS: Auto Mode и классический EKS
-
-## 4.1 Два подхода
-
-Сегодня полезно уметь работать с обеими моделями:
-
-| Модель | Что важно понять |
-|---|---|
-| **EKS Auto Mode** | AWS берёт на себя больше инфраструктурного lifecycle: compute, networking, load balancing, block storage и др. |
-| **Standard EKS + Managed Node Groups** | Ты лучше понимаешь nodes, add-ons, scaling и традиционную операционную модель |
-
-AWS описывает Auto Mode как расширение управления инфраструктурой Kubernetes; в документации он указан как рекомендуемый способ управления nodes для новых сценариев. https://docs.aws.amazon.com/eks/latest/userguide/automode.html
-
-## 4.2 Auto Mode через eksctl
-
-```yaml
-# auto-mode-cluster.yaml
-apiVersion: eksctl.io/v1alpha5
-kind: ClusterConfig
-
-metadata:
-  name: eks-auto-course
-  region: eu-central-1
-
-autoModeConfig:
-  enabled: true
-```
-
-Создание:
-
-```bash
-eksctl create cluster -f auto-mode-cluster.yaml
-```
-
-`eksctl` поддерживает `autoModeConfig.enabled: true`; при включении Auto Mode AWS/EKS управляет compute, networking, load balancing и block storage capabilities расширенно. https://docs.aws.amazon.com/eks/latest/eksctl/auto-mode.html
-
-## 4.3 Standard EKS + Managed Node Groups
+В продакшене лучше не пользоваться флагами, а описывать кластер в YAML — это переиспользуемо и попадает в git.
 
 ```yaml
 # cluster.yaml
@@ -685,914 +316,728 @@ apiVersion: eksctl.io/v1alpha5
 kind: ClusterConfig
 
 metadata:
-  name: eks-course
+  name: demo-cluster
   region: eu-central-1
-  version: "1.36"
+  version: "1.30"
+
+vpc:
+  cidr: 10.0.0.0/16
+  nat:
+    gateway: Single
 
 managedNodeGroups:
-  - name: general
-    instanceType: m6a.large
-    minSize: 2
-    desiredCapacity: 2
+  - name: standard-workers
+    instanceType: t3.medium
+    minSize: 1
     maxSize: 4
+    desiredCapacity: 2
     privateNetworking: true
-    volumeSize: 50
-```
+    labels:
+      role: worker
+    tags:
+      environment: dev
 
-Создание:
+addons:
+  - name: vpc-cni
+  - name: coredns
+  - name: kube-proxy
+  - name: aws-ebs-csi-driver
+
+iam:
+  withOIDC: true
+```
 
 ```bash
 eksctl create cluster -f cluster.yaml
 ```
 
-AWS подтверждает, что Managed Node Groups автоматизируют provisioning и lifecycle EC2 nodes, включая updates и draining. https://docs.aws.amazon.com/eks/latest/userguide/managed-node-groups.html
+`withOIDC: true` — критично важная строчка: без OIDC provider не заработает IRSA (модуль 6).
 
-## 4.4 Что создать руками
-
-После cluster creation проверь:
+## 2.4 Подключение kubectl к кластеру
 
 ```bash
-kubectl get nodes -o wide
-kubectl get pods -A
-aws eks describe-cluster --name "$CLUSTER_NAME" --region "$AWS_REGION"
-```
+aws eks update-kubeconfig --region eu-central-1 --name demo-cluster
 
-Смотри CloudFormation stacks, VPC, subnets, security groups, IAM roles и EC2.
-
-## 4.5 kubeconfig
-
-```bash
-aws eks update-kubeconfig \
-  --region "$AWS_REGION" \
-  --name "$CLUSTER_NAME"
-```
-
-Проверка:
-
-```bash
 kubectl get nodes
+kubectl get pods -A
 ```
 
-## 4.6 Add-ons
+`update-kubeconfig` добавляет в `~/.kube/config` запись с exec-плагином `aws eks get-token`, который на лету генерирует краткоживущий токен аутентификации через IAM — отдельного пароля к кластеру нет, доступ полностью завязан на IAM.
 
-Amazon EKS Add-ons позволяют управлять поддерживающим software через EKS API; AWS валидирует curated add-ons и рекомендует managed add-ons вместо self-managed там, где это возможно. https://docs.aws.amazon.com/eks/latest/userguide/eks-add-ons.html
+## 2.5 Кто имеет доступ к кластеру
 
-Посмотреть:
+Доступ к Kubernetes API в EKS управляется через `aws-auth` ConfigMap (в старых кластерах) или через Access Entries (современный способ, рекомендуемый AWS):
 
 ```bash
-aws eks list-addons \
-  --cluster-name "$CLUSTER_NAME" \
-  --region "$AWS_REGION"
+# современный способ — Access Entries
+aws eks create-access-entry \
+  --cluster-name demo-cluster \
+  --principal-arn arn:aws:iam::123456789012:user/jane \
+  --type STANDARD
+
+aws eks associate-access-policy \
+  --cluster-name demo-cluster \
+  --principal-arn arn:aws:iam::123456789012:user/jane \
+  --access-scope type=cluster \
+  --policy-arn arn:aws:eks::aws:cluster-access-policy/AmazonEKSAdminPolicy
 ```
 
-Версии:
+Важно: тот, кто создал кластер, получает доступ автоматически. Все остальные IAM-пользователи/роли — только через Access Entries (или устаревший `aws-auth` ConfigMap).
+
+## 2.6 Самая частая ошибка запуска
+
+`kubectl get nodes` ничего не возвращает или зависает — почти всегда одна из причин:
+- Не выполнили `aws eks update-kubeconfig`, kubeconfig смотрит не туда
+- IAM-принципал, под которым вы работаете, не добавлен в Access Entries/aws-auth
+- Узлы ещё не присоединились к кластеру (проверить `eksctl get nodegroup`)
+- Security group control plane не пускает узлы (если кластер создавался не через eksctl, а руками)
+
+## 2.7 Где EKS хранит состояние
+
+Само состояние Kubernetes (объекты, их статусы) — в managed `etcd`, который вы не видите напрямую. Единственный способ туда попасть — через Kubernetes API. Прямого доступа к `etcd`, снапшотов через AWS Console нет — бэкап состояния кластера делается на уровне ваших манифестов (держите их в git) и через инструменты вроде Velero (модуль 17), которые бэкапят объекты через API, а не сам etcd.
+
+## 2.8 Первый деплоймент и первый Service
 
 ```bash
-aws eks describe-addon-versions \
-  --addon-name vpc-cni \
-  --kubernetes-version 1.36
+kubectl create deployment nginx --image=nginx:1.27 --replicas=2
+kubectl expose deployment nginx --port=80 --type=LoadBalancer
+
+kubectl get svc nginx -w
+# дождитесь EXTERNAL-IP — это будет DNS-имя classic/network load balancer
 ```
+
+Через минуту-две в поле `EXTERNAL-IP` появится DNS-имя ELB — AWS Load Balancer создался автоматически, потому что в кластере уже работает встроенный in-tree cloud provider (для полноценного управления ALB/NLB в продакшене используют AWS Load Balancer Controller, модуль 9).
 
 ### Практика
 
-1. Создай учебный Standard cluster.
-2. Создай отдельный Auto Mode cluster, если бюджет позволяет.
-3. Сравни node resources и add-ons.
-4. Сравни, кто управляет compute lifecycle.
-5. Удали оба кластера после лаборатории.
-
-### Удаление
-
-```bash
-eksctl delete cluster --name "$CLUSTER_NAME" --region "$AWS_REGION"
-```
-
-> Перед удалением убедись в `kubectl config current-context` и AWS account.
-
-### Вопросы
-
-1. Чем Auto Mode отличается от Managed Node Groups?
-2. Какие части платформы AWS может управлять в Auto Mode?
-3. Почему полезно пройти Standard EKS перед production Auto Mode?
-4. Какие AWS resources создаются вокруг EKS?
+1. Поднимите кластер через `eksctl` с конфиг-файлом на 2 узла
+2. Подключите `kubectl`, убедитесь, что видите узлы через `kubectl get nodes`
+3. Задеплойте `nginx`, обнажите его через `Service` типа `LoadBalancer`, откройте в браузере
+4. Добавьте второго IAM-пользователя через Access Entries с правами только на чтение (`AmazonEKSViewPolicy`), проверьте, что он не может удалять поды
 
 ---
 
-# Модуль 5. Workloads: Pod, Deployment, Service, ConfigMap, Secret
+# Модуль 3. Kubernetes-объекты глазами EKS
 
-## 5.1 Первый Deployment
+## 3.1 Что не меняется
+
+Все стандартные объекты Kubernetes работают в EKS так же, как в любом другом дистрибутиве: `Pod`, `Deployment`, `StatefulSet`, `DaemonSet`, `Job`, `CronJob`, `ConfigMap`, `Secret`, `Namespace`, `Service`, `Ingress`. Если вы умеете писать манифесты для kind/minikube — 90% этого опыта переносится напрямую.
+
+## 3.2 Что специфично для EKS в стандартных объектах
+
+- `Service` типа `LoadBalancer` — создаёт реальный Classic/Network Load Balancer в AWS
+- `Ingress` — по умолчанию ничего не делает, пока не поставлен ingress-контроллер (в EKS обычно AWS Load Balancer Controller, модуль 9)
+- `StorageClass` — по умолчанию есть `gp2`/`gp3` через EBS CSI Driver (если аддон установлен)
+- `ServiceAccount` — получает особый смысл через аннотацию `eks.amazonaws.com/role-arn` для IRSA (модуль 6)
+- Метки узлов (`node.kubernetes.io/instance-type`, `topology.kubernetes.io/zone`) автоматически проставляются EKS и полезны для `nodeSelector`/`affinity`
+
+## 3.3 Namespace как единица организации в EKS
+
+```bash
+kubectl create namespace payments
+kubectl create namespace analytics
+
+kubectl config set-context --current --namespace=payments
+```
+
+Типичная практика: namespace на команду или на окружение (`payments-dev`, `payments-staging`, `payments-prod`), с `ResourceQuota` на каждый:
+
+```yaml
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: payments-quota
+  namespace: payments
+spec:
+  hard:
+    requests.cpu: "10"
+    requests.memory: 20Gi
+    limits.cpu: "20"
+    limits.memory: 40Gi
+    pods: "50"
+```
+
+## 3.4 Deployment: базовый пример с requests/limits
 
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: web
+  name: payments-api
+  namespace: payments
 spec:
   replicas: 3
   selector:
     matchLabels:
-      app: web
+      app: payments-api
   template:
     metadata:
       labels:
-        app: web
+        app: payments-api
     spec:
       containers:
-        - name: web
-          image: nginx:alpine
+        - name: payments-api
+          image: 123456789012.dkr.ecr.eu-central-1.amazonaws.com/payments-api:1.4.2
           ports:
-            - containerPort: 80
+            - containerPort: 8080
           resources:
             requests:
-              cpu: 100m
-              memory: 64Mi
+              cpu: 250m
+              memory: 256Mi
             limits:
               cpu: 500m
-              memory: 256Mi
+              memory: 512Mi
           readinessProbe:
             httpGet:
-              path: /
-              port: 80
-            initialDelaySeconds: 3
-            periodSeconds: 5
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
           livenessProbe:
             httpGet:
-              path: /
-              port: 80
-            initialDelaySeconds: 10
-            periodSeconds: 10
+              path: /health
+              port: 8080
+            initialDelaySeconds: 15
 ```
 
-Применяем:
+`requests` критичны в EKS не меньше, чем везде — именно по ним планировщик и Cluster Autoscaler/Karpenter решают, влезает ли под на узел (модуль 8).
 
-```bash
-kubectl apply -f deployment.yaml
-kubectl get deploy
-kubectl get pods -l app=web -o wide
-```
+## 3.5 Affinity и распределение по зонам
 
-## 5.2 Service
+Чтобы приложение не легло целиком при падении одной AZ:
 
 ```yaml
-apiVersion: v1
-kind: Service
-metadata:
-  name: web
 spec:
-  selector:
-    app: web
-  ports:
-    - port: 80
-      targetPort: 80
-  type: ClusterIP
+  template:
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: payments-api
 ```
 
-Проверка:
+## 3.6 Таргетирование Fargate vs EC2-узлов
 
-```bash
-kubectl get svc web
-kubectl get endpointslice -l kubernetes.io/service-name=web
-```
-
-## 5.3 ConfigMap
-
-```yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: web-config
-data:
-  APP_ENV: "dev"
-  LOG_LEVEL: "info"
-```
-
-В Pod:
-
-```yaml
-envFrom:
-  - configMapRef:
-      name: web-config
-```
-
-## 5.4 Secret
-
-```bash
-kubectl create secret generic db-secret \
-  --from-literal=DB_USER=app \
-  --from-literal=DB_PASSWORD='change-me'
-```
-
-Использование:
-
-```yaml
-envFrom:
-  - secretRef:
-      name: db-secret
-```
-
-Не отправляй реальные secret values в Git.
-
-## 5.5 Rollout
-
-```bash
-kubectl set image deployment/web web=nginx:1.27-alpine
-kubectl rollout status deployment/web
-kubectl rollout history deployment/web
-kubectl rollout undo deployment/web
-```
+Если в кластере есть и Fargate profile, и обычные node groups, под попадает на Fargate только если matches его selector'у (по namespace + опционально label). Иначе планировщик отправит его на обычный EC2-узел. Подробнее — модуль 4.
 
 ### Практика
 
-1. Подними Deployment из 3 replicas.
-2. Удали один Pod.
-3. Обнови image.
-4. Сделай rollback.
-5. Добавь readiness и liveness.
-6. Создай ConfigMap и Secret.
+1. Создайте namespace с ResourceQuota на 4 CPU / 8Gi
+2. Задеплойте приложение с requests/limits и readiness/liveness пробами
+3. Добавьте `topologySpreadConstraints`, задеплойте с 3 репликами, проверьте через `kubectl get pods -o wide`, что поды разъехались по разным зонам
 
-### Типичные ошибки
+### Вопросы для самопроверки
 
-- нет `resources.requests`;
-- неверный selector Service;
-- liveness probe убивает ещё не стартовавшее приложение;
-- секреты лежат в plain text Git repository;
-- image без immutable tag/digest в production.
-
-### Вопросы
-
-1. Чем readiness отличается от liveness?
-2. Почему Deployment лучше, чем ручное создание Pod?
-3. Что делает selector Service?
-4. Почему `latest` плохой production tag?
+1. Что из стандартных Kubernetes-объектов в EKS "просто работает", а что требует дополнительных контроллеров/аддонов?
+2. Зачем нужна аннотация `eks.amazonaws.com/role-arn` на ServiceAccount?
+3. Как заставить Kubernetes не сажать все реплики деплоймента в одну AZ?
 
 ---
 
-# Модуль 6. IAM и доступ к кластеру: Access Entries и RBAC
+# Модуль 4. Node groups: Managed, Self-managed, Fargate
 
-## 6.1 Два разных вопроса
+## 4.1 Три способа получить вычислительные мощности
 
-Всегда разделяй:
+| | Managed Node Group | Self-managed nodes | Fargate |
+|---|---|---|---|
+| Кто патчит ОС | AWS (по требованию, вы жмёте "обновить") | Вы сами | AWS полностью |
+| Автоскейлинг узлов | Через ASG + Cluster Autoscaler/Karpenter | Через ASG + Cluster Autoscaler | Не нужен, под = своя "нода" |
+| Кастомный AMI | Ограниченно | Полностью свой | Недоступно |
+| DaemonSet | Работает | Работает | Не работает |
+| hostNetwork/privileged | Работает | Работает | Не работает |
+| Биллинг | За EC2-инстансы целиком | За EC2-инстансы целиком | За vCPU/память конкретного пода |
 
-```text
-Кто может вызвать AWS API?
-        |
-       IAM
-        |
-        +-------------------+
-                            |
-                   Кто может делать
-                   Kubernetes actions?
-                            |
-                           RBAC
-```
+## 4.2 Managed Node Group
 
-В EKS есть интеграция IAM ↔ Kubernetes authentication/authorization.
-
-## 6.2 EKS Access Entries
-
-AWS сейчас рекомендует EKS Access Entries для предоставления IAM principals доступа к Kubernetes API. Старый `aws-auth` ConfigMap объявлен deprecated. https://docs.aws.amazon.com/eks/latest/userguide/access-entries.htmlhttps://docs.aws.amazon.com/eks/latest/userguide/auth-configmap.html
-
-Посмотреть:
+Самый частый выбор по умолчанию. AWS управляет Auto Scaling Group, обновлением AMI (когда вы инициируете), grace-full drain при обновлении узлов.
 
 ```bash
-aws eks list-access-entries \
-  --cluster-name "$CLUSTER_NAME" \
-  --region "$AWS_REGION"
+eksctl create nodegroup \
+  --cluster demo-cluster \
+  --name spot-workers \
+  --instance-types t3.medium,t3a.medium \
+  --spot \
+  --nodes 2 --nodes-min 0 --nodes-max 10 \
+  --node-private-networking
 ```
 
-Создание:
+Смешивание нескольких типов инстансов (`--instance-types`) в spot-группе снижает риск одновременного вытеснения всех узлов при нехватке конкретного типа spot-инстансов.
+
+## 4.3 Self-managed nodes
+
+Нужны, когда требуется что-то, чего managed node group не даёт: специфичный кастомный AMI, нестандартный bootstrap-скрипт, интеграция с уже существующей ASG. Создаётся через launch template + собственную Auto Scaling Group, присоединяется к кластеру через `bootstrap.sh` в user-data:
 
 ```bash
-aws eks create-access-entry \
-  --cluster-name "$CLUSTER_NAME" \
-  --principal-arn arn:aws:iam::${AWS_ACCOUNT_ID}:role/DeveloperRole \
-  --region "$AWS_REGION"
+#!/bin/bash
+/etc/eks/bootstrap.sh demo-cluster \
+  --kubelet-extra-args '--node-labels=role=custom'
 ```
 
-Access Policy:
+Используйте self-managed, только если у вас реальная причина — иначе Managed Node Group отнимает меньше операционного времени.
 
-```bash
-aws eks associate-access-policy \
-  --cluster-name "$CLUSTER_NAME" \
-  --principal-arn arn:aws:iam::${AWS_ACCOUNT_ID}:role/DeveloperRole \
-  --policy-arn arn:aws:eks::aws:cluster-access-policy/AmazonEKSViewPolicy \
-  --access-scope type=namespace,namespaces=shop \
-  --region "$AWS_REGION"
-```
-
-AWS access policies являются Kubernetes permissions templates, а не IAM permissions. Scope можно ограничить cluster-wide или namespace. https://docs.aws.amazon.com/eks/latest/userguide/access-policies.html
-
-## 6.3 RBAC
-
-Пример:
+## 4.4 Fargate profiles
 
 ```yaml
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: pod-reader
-  namespace: shop
-rules:
-  - apiGroups: [""]
-    resources: ["pods"]
-    verbs: ["get", "list", "watch"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: pod-reader-binding
-  namespace: shop
-subjects:
-  - kind: Group
-    name: developers
-roleRef:
-  kind: Role
-  name: pod-reader
-  apiGroup: rbac.authorization.k8s.io
+# добавка к cluster.yaml
+fargateProfiles:
+  - name: fp-batch
+    selectors:
+      - namespace: batch-jobs
+        labels:
+          run-on: fargate
 ```
 
-## 6.4 Минимальные права
-
-Не выдавай:
-
-```text
-cluster-admin -> всем разработчикам
+```bash
+eksctl create fargateprofile \
+  --cluster demo-cluster \
+  --name fp-batch \
+  --namespace batch-jobs
 ```
 
-Используй:
+Каждый под на Fargate получает изолированную "микро-ВМ" — под живёт как бы на собственном узле. Ограничения: нет `DaemonSet`, нет `hostPort`, нет `hostNetwork`, максимум 4 vCPU / 16 GB на под (на момент написания курса — проверяйте актуальные лимиты), нет GPU.
 
-```text
-IAM role
-   |
-   +--> Access Entry
-           |
-           +--> View in namespace X
+Fargate хорошо подходит для: batch-джобов с непредсказуемой нагрузкой, приложений с редкими всплесками, когда не хочется держать простаивающие EC2, и для случаев, когда вообще не хочется администрировать узлы.
+
+## 4.5 Bottlerocket — специализированная ОС для узлов
+
+AWS также предлагает Bottlerocket — минималистичный Linux-дистрибутив, заточенный именно под запуск контейнеров: меньше поверхность атаки, immutable root filesystem, автообновления через отдельный оператор.
+
+```yaml
+managedNodeGroups:
+  - name: bottlerocket-workers
+    amiFamily: Bottlerocket
+    instanceType: m5.large
+    desiredCapacity: 3
 ```
+
+## 4.6 Taints и tolerations для разделения нагрузок
+
+Чтобы GPU-узлы использовались только под ML-нагрузку, а не заняты случайным nginx:
+
+```bash
+kubectl taint nodes gpu-node-1 workload=ml:NoSchedule
+```
+
+```yaml
+spec:
+  tolerations:
+    - key: "workload"
+      operator: "Equal"
+      value: "ml"
+      effect: "NoSchedule"
+  nodeSelector:
+    workload-type: gpu
+```
+
+## 4.7 Как выбрать между managed EC2 и Fargate
+
+- Стабильная, предсказуемая, долгоживущая нагрузка с DaemonSet'ами (логирование, мониторинг-агенты) → managed EC2
+- Batch/cron задачи, спайковая нагрузка, желание вообще не думать про узлы → Fargate
+- Смешанный кластер — обычная практика: часть namespace на Fargate, часть на managed node groups
 
 ### Практика
 
-1. Создай namespace `shop`.
-2. Создай access entry для тестовой role.
-3. Дай View Policy только на `shop`.
-4. Проверь, что доступ к другому namespace запрещён.
-5. Пройди тот же сценарий через Kubernetes Role/RoleBinding.
+1. Добавьте в кластер вторую managed node group на spot-инстансах с несколькими типами инстансов
+2. Создайте Fargate profile для namespace `batch-jobs` и задеплойте туда простой Job
+3. Затейнтуйте один узел под конкретную нагрузку и убедитесь, что обычные поды туда не садятся
 
-### Вопросы
+### Вопросы для самопроверки
 
-1. Что такое Access Entry?
-2. Чем IAM authorization отличается от Kubernetes RBAC?
-3. Почему `aws-auth` уже не нужно делать фундаментом нового курса?
-4. Что означает least privilege для EKS access?
+1. Какие ограничения есть у Fargate, которых нет у managed node group?
+2. Зачем указывать несколько `--instance-types` для spot node group?
+3. В каком случае имеет смысл self-managed node group вместо managed?
 
 ---
 
-# Модуль 7. IAM для Pod'ов: EKS Pod Identity и IRSA
+# Модуль 5. Сеть в EKS: VPC CNI, security groups, ENI
 
-## 7.1 Проблема
+## 5.1 Главная особенность: поды получают реальные IP из VPC
 
-Представь Pod, который должен читать S3:
+В отличие от многих self-managed Kubernetes-сетей (Calico с оверлеем, Flannel), стандартный AWS VPC CNI выдаёт каждому поду настоящий IP-адрес из вашей VPC-подсети. Это значит:
+- Под виден в VPC напрямую, как обычный EC2-инстанс, к нему применяются VPC security groups и route tables
+- Никакого NAT/оверлея между подами внутри кластера — трафик идёт напрямую по VPC
+- Но: количество подов на узле ограничено количеством ENI и IP-адресов, которые может держать конкретный тип инстанса
 
-```text
-Pod -> S3
+## 5.2 Как VPC CNI резервирует IP
+
+Каждый worker-узел резервирует пул IP-адресов заранее (через `ipamd`), чтобы под мог быстро подняться без ожидания выделения нового ENI. Формула лимита подов на узел зависит от типа инстанса:
+
+```
+Максимум подов = (число ENI на инстансе × (число IP на ENI − 1)) + 2
 ```
 
-Нельзя просто положить в image:
+Например, `t3.medium` держит 3 ENI по 6 IP → около 17 подов максимум. Это частая причина, почему кластер "не может зашедулить под" при видимо свободном CPU/памяти — упёрлись в IP-лимит, а не в ресурсы.
 
-```text
-AWS_ACCESS_KEY_ID=...
-AWS_SECRET_ACCESS_KEY=...
-```
+## 5.3 Prefix Delegation — способ обойти лимит IP
 
-Нужны временные credentials и least privilege.
-
-## 7.2 EKS Pod Identity
-
-EKS Pod Identity позволяет связать IAM role с Kubernetes ServiceAccount; AWS выдаёт Pod'у временные credentials через EKS Auth и Pod Identity Agent. AWS описывает это как способ дать workload'ам IAM permissions без хранения static credentials в контейнерах. https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html
-
-## 7.3 Установка agent
-
-Для Standard EKS:
+Начиная с некоторой версии VPC CNI можно включить Prefix Delegation — тогда ENI резервирует не отдельные IP, а целые /28 префиксы (16 адресов разом), что резко увеличивает плотность подов на узле:
 
 ```bash
-eksctl create addon \
-  --cluster "$CLUSTER_NAME" \
-  --name eks-pod-identity-agent \
-  --region "$AWS_REGION"
+kubectl set env daemonset aws-node -n kube-system ENABLE_PREFIX_DELEGATION=true
 ```
 
-## 7.4 Association
+## 5.4 Security groups для подов (Security Groups for Pods)
 
-Пример через AWS CLI:
+По умолчанию все поды на узле используют security group самого узла. Но иногда нужно, чтобы конкретный под (например, с доступом к RDS) имел собственные, более узкие правила:
+
+```yaml
+apiVersion: vpcresources.k8s.aws/v1beta1
+kind: SecurityGroupPolicy
+metadata:
+  name: db-access
+  namespace: payments
+spec:
+  podSelector:
+    matchLabels:
+      app: payments-api
+  securityGroups:
+    groupIds:
+      - sg-0123456789abcdef0
+```
+
+Это позволяет не открывать RDS security group для всего узла целиком, а дать доступ точечно, только нужным подам.
+
+## 5.5 Network Policy: изоляция трафика между подами
+
+Сам по себе VPC CNI не блокирует трафик между подами (все поды видят друг друга по умолчанию). Чтобы включить `NetworkPolicy`, нужен либо встроенный network policy engine VPC CNI (можно включить флагом), либо Calico/Cilium поверх:
 
 ```bash
-aws eks create-pod-identity-association \
-  --cluster-name "$CLUSTER_NAME" \
-  --namespace shop \
-  --service-account s3-reader \
-  --role-arn arn:aws:iam::${AWS_ACCOUNT_ID}:role/ShopS3ReadRole \
-  --region "$AWS_REGION"
+kubectl set env daemonset aws-node -n kube-system ENABLE_NETWORK_POLICY=true
 ```
 
-AWS CLI документирует этот API как связь ServiceAccount ↔ IAM role; credentials для Pod являются временными и автоматически ротируются. https://docs.aws.amazon.com/cli/latest/reference/eks/create-pod-identity-association.html
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-from-other-namespaces
+  namespace: payments
+spec:
+  podSelector: {}
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector: {}
+```
 
-## 7.5 ServiceAccount
+## 5.6 CoreDNS и внутрикластерный DNS
+
+`payments-api.payments.svc.cluster.local` резолвится через CoreDNS — стандартный DaemonSet/Deployment, идущий аддоном EKS. При больших кластерах CoreDNS иногда становится узким местом — тогда включают `NodeLocal DNSCache` для снижения задержек резолва.
+
+## 5.7 Выход в интернет: NAT Gateway
+
+Узлы и поды в приватных подсетях выходят в интернет (скачать образ, обратиться к внешнему API) через NAT Gateway в публичной подсети. Один NAT Gateway на VPC — дешевле, но единая точка отказа при падении AZ; по одному NAT Gateway на AZ — надёжнее и дороже.
+
+## 5.8 VPC Endpoints — трафик к AWS-сервисам без выхода в интернет
+
+Чтобы поды могли обращаться к ECR, S3, Secrets Manager и т.д. не через NAT Gateway (дешевле и быстрее), настраивают VPC Endpoints:
+
+```bash
+aws ec2 create-vpc-endpoint \
+  --vpc-id vpc-0123456789 \
+  --service-name com.amazonaws.eu-central-1.ecr.api \
+  --vpc-endpoint-type Interface \
+  --subnet-ids subnet-aaa subnet-bbb \
+  --security-group-ids sg-xxxxx
+```
+
+Особенно важно для приватного EKS-кластера (Private-only endpoint access) — без VPC endpoints к ECR/S3 узлы просто не смогут тянуть образы.
+
+### Практика
+
+1. Выясните формулу максимального числа подов для типа инстанса, который вы используете в кластере (`t3.medium` или другой)
+2. Включите Prefix Delegation и сравните лимит подов на узле до/после
+3. Создайте `SecurityGroupPolicy` для одного деплоймента, ограничив ему доступ отдельной security group
+4. Настройте `NetworkPolicy`, запрещающую трафик между namespace `payments` и `analytics`
+
+### Вопросы для самопроверки
+
+1. Почему под в EKS может не запускаться, хотя на узле есть свободный CPU и память?
+2. Что такое Prefix Delegation и какую проблему он решает?
+3. Зачем нужны Security Groups for Pods, если есть security group самого узла?
+4. Зачем настраивать VPC Endpoints, если уже есть NAT Gateway?
+
+---
+
+# Модуль 6. IAM и EKS: IRSA и Pod Identity
+
+## 6.1 Проблема, которую решают IRSA и Pod Identity
+
+Приложению в поде часто нужен доступ к AWS-сервисам — S3, DynamoDB, SQS. Наивные (плохие) варианты: зашить access key/secret key в переменные окружения, или дать всем узлам одну широкую IAM-роль, которую видят вообще все поды на узле. Оба варианта — дыра в безопасности.
+
+Решение: дать конкретному Kubernetes `ServiceAccount` (а значит — конкретным подам) отдельную, узкую IAM-роль, без единого статического ключа.
+
+## 6.2 IRSA (IAM Roles for Service Accounts) — как это работает
+
+1. У кластера есть OIDC provider (включается флагом `withOIDC: true` при создании)
+2. Создаётся IAM-роль с trust policy, разрешающей конкретному `ServiceAccount` в конкретном namespace её принимать
+3. `ServiceAccount` в Kubernetes аннотируется ARN этой роли
+4. Под, использующий этот `ServiceAccount`, при старте получает через mutating webhook переменные окружения и смонтированный токен, которые SDK (boto3, aws-sdk-go и т.д.) автоматически использует для `AssumeRoleWithWebIdentity`
+
+```bash
+eksctl create iamserviceaccount \
+  --cluster demo-cluster \
+  --namespace payments \
+  --name payments-api-sa \
+  --attach-policy-arn arn:aws:iam::123456789012:policy/PaymentsS3ReadOnly \
+  --approve
+```
 
 ```yaml
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: s3-reader
-  namespace: shop
+  name: payments-api-sa
+  namespace: payments
+  annotations:
+    eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/payments-api-role
 ```
-
-Deployment:
 
 ```yaml
 spec:
   template:
     spec:
-      serviceAccountName: s3-reader
+      serviceAccountName: payments-api-sa
       containers:
-        - name: app
-          image: public.ecr.aws/amazonlinux/amazonlinux:2023
-          command: ["sh", "-c"]
-          args: ["sleep 3600"]
+        - name: payments-api
+          image: ...
 ```
 
-## 7.6 IRSA
+## 6.3 EKS Pod Identity — более новый и простой способ
 
-IRSA = IAM Roles for Service Accounts. Это более старый и всё ещё используемый подход на существующих платформах. Он использует OIDC identity provider и trust policy IAM role.
+EKS Pod Identity — механизм, пришедший на смену IRSA, проще в настройке и не требует "плясок" с OIDC trust policy на каждый ServiceAccount.
 
-```text
-Pod
- |
- ServiceAccount
- |
- OIDC
- |
- IAM Role
- |
- AWS API
+```bash
+aws eks create-pod-identity-association \
+  --cluster-name demo-cluster \
+  --namespace payments \
+  --service-account payments-api-sa \
+  --role-arn arn:aws:iam::123456789012:role/payments-api-role
 ```
 
-Для legacy-кластеров и совместимости IRSA важно знать. Для новых архитектур стоит отдельно рассматривать EKS Pod Identity.
+Роли достаточно доверять сервису `pods.eks.amazonaws.com`, без привязки к ARN конкретного OIDC provider кластера — это упрощает multi-cluster сценарии, где одна и та же роль используется в разных кластерах.
 
-## 7.7 Least privilege
+## 6.4 IRSA vs Pod Identity: когда что выбрать
 
-Плохо:
+| | IRSA | Pod Identity |
+|---|---|---|
+| Требует OIDC provider | Да | Нет |
+| Настройка trust policy | На каждую роль отдельно, под конкретный кластер | Общая для сервиса `pods.eks.amazonaws.com` |
+| Поддержка в старых кластерах | Везде | Только относительно новые версии EKS |
+| Миграция между кластерами | Нужно переиздавать роли | Проще — роль не привязана к OIDC конкретного кластера |
 
-```text
-AmazonS3FullAccess
+Для новых кластеров AWS рекомендует начинать с Pod Identity, если версия EKS её поддерживает.
+
+## 6.5 Принцип наименьших привилегий на практике
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["s3:GetObject"],
+      "Resource": "arn:aws:s3:::payments-invoices/*"
+    }
+  ]
+}
 ```
 
-Лучше:
+Не давайте `s3:*` на `*` "чтобы не разбираться" — каждая роль пода должна иметь ровно те права, которые нужны конкретному сервису, не больше.
 
-```text
-s3:GetObject
-s3:ListBucket
+## 6.6 IAM-роли самих узлов vs роли подов
+
+Узел (EC2-инстанс) имеет свою собственную node IAM role — минимально необходимую для работы kubelet (`AmazonEKSWorkerNodePolicy`, `AmazonEKS_CNI_Policy`, доступ к ECR на чтение). Эта роль НЕ должна содержать прав приложений — иначе любой под на узле сможет притвориться, что имеет эти права (через доступ к instance metadata service, если не защищён IMDSv2).
+
+## 6.7 IMDSv2 — обязательно включайте
+
+```bash
+aws ec2 modify-instance-metadata-options \
+  --instance-id i-0123456789 \
+  --http-tokens required \
+  --http-put-response-hop-limit 1
 ```
 
-и только нужный bucket/prefix.
+`http-put-response-hop-limit 1` дополнительно мешает поду достучаться до IMDS узла через сетевой хоп — важная защита в комбинации с широкой node role.
 
 ### Практика
 
-1. Создай S3 bucket для лаборатории.
-2. Создай минимальную IAM policy на read.
-3. Создай ServiceAccount.
-4. Создай Pod Identity association.
-5. Запусти Pod с AWS CLI.
-6. Проверь `aws s3 ls`.
-7. Удали association и убедись, что доступ пропал.
+1. Создайте IAM-политику с доступом на чтение к одному конкретному S3 bucket
+2. Настройте IRSA (или Pod Identity, если версия кластера позволяет) для одного деплоймента
+3. Проверьте из пода (`aws s3 ls s3://ваш-бакет`) что доступ есть, а к другому бакету — нет
+4. Убедитесь, что IMDSv2 включён на узлах, и `http-put-response-hop-limit` равен 1
 
-### Типичные ошибки
+### Вопросы для самопроверки
 
-- использовать IAM user keys в Secret;
-- дать node role слишком широкие permissions;
-- забыть Pod Identity Agent в Standard EKS;
-- доверять не тому IAM role;
-- считать IAM и Kubernetes RBAC одной системой.
-
-### Вопросы
-
-1. Чем Pod Identity отличается от node IAM role?
-2. Зачем ServiceAccount?
-3. Почему static AWS credentials в Pod — антипаттерн?
-4. В каких legacy-системах тебе встретится IRSA?
+1. Почему статические AWS-ключи в переменных окружения пода — плохая практика?
+2. В чём принципиальная разница между IRSA и Pod Identity?
+3. Что произойдёт, если дать node IAM role права приложения вместо роли пода?
+4. Зачем ограничивать hop limit для instance metadata service?
 
 ---
 
-# Модуль 8. Storage: EBS, EFS, PVC и Stateful workloads
+# Модуль 7. Хранилище: EBS CSI, EFS CSI, StorageClass
 
-## 8.1 Persistent storage
+## 7.1 Два основных сценария хранения
 
-Pod ephemeral. Поэтому:
+- **EBS (Elastic Block Store)** — блочное хранилище, привязано к одной AZ, монтируется только в один под одновременно (`ReadWriteOnce`). Подходит для баз данных, очередей с персистентностью.
+- **EFS (Elastic File System)** — сетевая файловая система, доступна из нескольких AZ и нескольких подов одновременно (`ReadWriteMany`). Подходит для общих файлов, загрузок пользователей, шаренных конфигов.
 
-```text
-Pod restart
-   |
-   +--> container filesystem может исчезнуть
+## 7.2 Установка EBS CSI Driver
+
+```bash
+eksctl create addon \
+  --cluster demo-cluster \
+  --name aws-ebs-csi-driver \
+  --service-account-role-arn arn:aws:iam::123456789012:role/AmazonEKS_EBS_CSI_DriverRole
 ```
 
-Для state используем PersistentVolume.
+Драйверу нужна собственная IAM-роль (через IRSA/Pod Identity) с правами создавать/удалять/монтировать EBS-тома.
 
-## 8.2 PVC
+## 7.3 StorageClass для EBS
 
 ```yaml
-apiVersion: v1
-kind: PersistentVolumeClaim
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
 metadata:
-  name: data
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 20Gi
-  storageClassName: gp3
+  name: gp3
+provisioner: ebs.csi.aws.com
+parameters:
+  type: gp3
+  encrypted: "true"
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Delete
 ```
 
-Проверка:
+`volumeBindingMode: WaitForFirstConsumer` важен: том создаётся не сразу при `PersistentVolumeClaim`, а только когда планировщик решил, в какой AZ будет под — иначе можно создать том в AZ, где нет свободных узлов.
 
-```bash
-kubectl get pvc
-kubectl get pv
-kubectl get storageclass
-```
-
-## 8.3 EBS CSI
-
-Amazon EBS CSI Driver управляет lifecycle EBS volumes для Kubernetes volumes. AWS рекомендует EBS CSI как EKS add-on; EBS не монтируется напрямую в Fargate Pod'ы. Auto Mode имеет отдельный storage integration. https://docs.aws.amazon.com/eks/latest/userguide/ebs-csi.html
-
-Посмотреть add-on:
-
-```bash
-aws eks describe-addon-versions \
-  --addon-name aws-ebs-csi-driver \
-  --kubernetes-version 1.36
-```
-
-Проверка:
-
-```bash
-kubectl get pods -n kube-system | grep ebs
-```
-
-## 8.4 EFS
-
-EFS нужен, когда storage должен быть shared и доступен нескольким Pod'ам.
-
-```text
-Pod A ---+
-         |
-Pod B ---+--> EFS
-         |
-Pod C ---+
-```
-
-AWS EFS CSI driver позволяет использовать EFS как PersistentVolume; dynamic provisioning требует поддерживаемой версии driver и IAM permissions. https://docs.aws.amazon.com/eks/latest/userguide/efs-csi.html
-
-## 8.5 EBS vs EFS
-
-| Сценарий | EBS | EFS |
-|---|---:|---:|
-| RWO stateful app | ✅ | возможно |
-| Shared filesystem | ❌ | ✅ |
-| Несколько AZ одновременно | обычно через storage semantics, не shared RWO | ✅ |
-| DB volume | ✅ | обычно нет |
-| Shared uploads | нет | ✅ |
-
-## 8.6 StatefulSet
+## 7.4 PersistentVolumeClaim и StatefulSet
 
 ```yaml
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: redis
+  name: postgres
 spec:
-  serviceName: redis
+  serviceName: postgres
   replicas: 1
   selector:
     matchLabels:
-      app: redis
+      app: postgres
   template:
     metadata:
       labels:
-        app: redis
+        app: postgres
     spec:
       containers:
-        - name: redis
-          image: redis:7-alpine
+        - name: postgres
+          image: postgres:16
           volumeMounts:
             - name: data
-              mountPath: /data
+              mountPath: /var/lib/postgresql/data
   volumeClaimTemplates:
     - metadata:
         name: data
       spec:
         accessModes: ["ReadWriteOnce"]
+        storageClassName: gp3
         resources:
           requests:
-            storage: 10Gi
+            storage: 20Gi
 ```
 
-### Практика
+В продакшене для реальной СУБД чаще берут managed RDS/Aurora вместо StatefulSet с EBS — но для очередей, кэшей с персистентностью, self-hosted баз этот паттерн абсолютно рабочий.
 
-1. Создай PVC.
-2. Запиши файл в volume.
-3. Перезапусти Pod.
-4. Проверь persistence.
-5. Разберись, какой EBS volume появился в AWS.
-6. Сравни с EFS.
+## 7.5 EFS CSI Driver для ReadWriteMany
 
-### Вопросы
-
-1. Зачем CSI driver?
-2. Когда использовать EBS, а когда EFS?
-3. Почему БД не стоит автоматически помещать в Kubernetes только потому, что это возможно?
-4. Чем StatefulSet отличается от Deployment?
-
----
-
-# Модуль 9. Networking приложений: Service, ALB, NLB и Ingress
-
-## 9.1 Service types
-
-```text
-ClusterIP   -> только cluster
-NodePort    -> порт node
-LoadBalancer -> external LB
+```bash
+eksctl create addon \
+  --cluster demo-cluster \
+  --name aws-efs-csi-driver \
+  --service-account-role-arn arn:aws:iam::123456789012:role/AmazonEKS_EFS_CSI_DriverRole
 ```
 
-## 9.2 AWS Load Balancer Controller
-
-AWS Load Balancer Controller управляет AWS Elastic Load Balancers для Kubernetes. Ingress обычно создаёт ALB, а Service type LoadBalancer — NLB в современной схеме контроллера. https://docs.aws.amazon.com/eks/latest/userguide/aws-load-balancer-controller.html
-
-AWS best practices рекомендуют AWS Load Balancer Controller вместо legacy Service Controller; в EKS Auto Mode соответствующие capabilities предоставляются автоматически. https://docs.aws.amazon.com/eks/latest/best-practices/load-balancing.html
-
-## 9.3 NLB через Service
+```yaml
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: efs-sc
+provisioner: efs.csi.aws.com
+parameters:
+  fileSystemId: fs-0123456789abcdef0
+  directoryPerms: "700"
+```
 
 ```yaml
 apiVersion: v1
-kind: Service
+kind: PersistentVolumeClaim
 metadata:
-  name: api
-  annotations:
-    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+  name: shared-uploads
 spec:
-  type: LoadBalancer
-  selector:
-    app: api
-  ports:
-    - port: 80
-      targetPort: 8080
+  accessModes: ["ReadWriteMany"]
+  storageClassName: efs-sc
+  resources:
+    requests:
+      storage: 5Gi
 ```
 
-## 9.4 ALB через Ingress
+EFS не тарифицируется по "запрошенному" объёму как EBS — платите за реально используемое место, и он автоматически масштабируется.
+
+## 7.6 Снапшоты EBS-томов
 
 ```yaml
-apiVersion: networking.k8s.io/v1
-kind: Ingress
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshot
 metadata:
-  name: shop
-  annotations:
-    alb.ingress.kubernetes.io/scheme: internet-facing
-    alb.ingress.kubernetes.io/target-type: ip
+  name: postgres-snapshot
 spec:
-  ingressClassName: alb
-  rules:
-    - host: shop.example.com
-      http:
-        paths:
-          - path: /
-            pathType: Prefix
-            backend:
-              service:
-                name: web
-                port:
-                  number: 80
+  volumeSnapshotClassName: csi-aws-vsc
+  source:
+    persistentVolumeClaimName: data-postgres-0
 ```
 
-Контроллер наблюдает за Kubernetes resource и создаёт AWS LB.
-
-## 9.5 ALB vs NLB
-
-| Характеристика | ALB | NLB |
-|---|---|---|
-| OSI | L7 | L4 |
-| HTTP routing | ✅ | нет L7 routing |
-| Host/path rules | ✅ | нет |
-| TCP | ограниченно через features | ✅ |
-| Web/API | ✅ | возможно |
-| Static public IP | нет как основной сценарий | есть Elastic IP options в поддерживаемых режимах |
-
-## 9.6 TLS
-
-Production:
-
-```text
-Client
-  |
-HTTPS
-  |
-ALB/NLB
-  |
-Target
-```
-
-Сертификаты обычно лучше управлять через ACM, а secrets для приложений — через соответствующие secret management patterns.
+Снапшоты — основа стратегии бэкапов персистентных данных в EKS (в связке с CronJob, который создаёт их по расписанию, или с Velero, модуль 17).
 
 ### Практика
 
-1. Подними ClusterIP.
-2. Создай LoadBalancer service.
-3. Посмотри, какой AWS LB появился.
-4. Создай Ingress.
-5. Настрой host/path routing.
-6. Добавь health checks.
+1. Установите EBS CSI Driver через IRSA
+2. Задеплойте `StatefulSet` с PVC, положите туда тестовые данные
+3. Удалите под, убедитесь, что данные не потерялись после пересоздания
+4. Настройте `VolumeSnapshot` вручную и восстановите том из снапшота в новый PVC
 
-### Типичные ошибки
+### Вопросы для самопроверки
 
-- неправильные subnet tags;
-- не установлен/сломался controller;
-- Security Group блокирует traffic;
-- Ingress backend смотрит на неправильный Service port;
-- DNS указывает не туда;
-- приложение слушает `127.0.0.1`, а не Pod interface.
-
-### Вопросы
-
-1. Когда использовать ALB?
-2. Когда нужен NLB?
-3. Как Ingress становится AWS ALB?
-4. Чем Service selector отличается от Ingress rule?
+1. Когда выбирать EBS, а когда EFS?
+2. Зачем нужен `volumeBindingMode: WaitForFirstConsumer`?
+3. Почему для настоящей продакшен-БД чаще выбирают RDS, а не StatefulSet с EBS?
 
 ---
 
-# Модуль 10. Scheduling: requests, limits, probes, taints, affinity
+# Модуль 8. Автоскейлинг: Cluster Autoscaler, Karpenter, HPA/VPA
 
-## 10.1 Resources
+## 8.1 Два уровня автоскейлинга
 
-Scheduler ориентируется прежде всего на requests.
+- **Скейлинг подов** — сколько реплик приложения запущено (HPA, VPA)
+- **Скейлинг узлов** — сколько EC2-инстансов есть в кластере, чтобы вместить все поды (Cluster Autoscaler, Karpenter)
 
-```yaml
-resources:
-  requests:
-    cpu: 500m
-    memory: 256Mi
-  limits:
-    cpu: "1"
-    memory: 512Mi
-```
+Их часто путают, но это разные, дополняющие друг друга механизмы: HPA добавляет реплики → подам не хватает места на существующих узлах → Cluster Autoscaler/Karpenter добавляет новые узлы.
 
-Объяснение:
-
-```text
-requests -> сколько scheduler резервирует/учитывает
-limits   -> верхняя граница runtime resource consumption
-```
-
-## 10.2 Pending Pod
-
-Если Pod:
-
-```text
-Pending
-```
-
-Сначала:
-
-```bash
-kubectl describe pod <pod-name>
-```
-
-Ищи:
-
-```text
-Events:
-  FailedScheduling
-```
-
-## 10.3 Taints / tolerations
-
-Node:
-
-```bash
-kubectl taint nodes node-1 workload=critical:NoSchedule
-```
-
-Pod:
-
-```yaml
-tolerations:
-  - key: workload
-    operator: Equal
-    value: critical
-    effect: NoSchedule
-```
-
-## 10.4 Node labels
-
-```bash
-kubectl label node <node-name> workload=compute
-```
-
-Pod:
-
-```yaml
-nodeSelector:
-  workload: compute
-```
-
-## 10.5 Affinity
-
-Для сложного scheduling используй node affinity и pod affinity/anti-affinity.
-
-## 10.6 Topology spread
-
-```yaml
-topologySpreadConstraints:
-  - maxSkew: 1
-    topologyKey: topology.kubernetes.io/zone
-    whenUnsatisfiable: DoNotSchedule
-    labelSelector:
-      matchLabels:
-        app: api
-```
-
-Это помогает не посадить все replicas в одну зону.
-
-## 10.7 Probes
-
-Readiness:
-
-```text
-Под жив
-   |
-   +--> но ещё не готов принимать traffic
-```
-
-Liveness:
-
-```text
-Под завис
-   |
-   +--> kubelet должен перезапустить container
-```
-
-Startup probe полезна для медленного startup, чтобы liveness не начал убивать приложение слишком рано.
-
-### Практика
-
-1. Создай Pod с завышенным memory request.
-2. Получи `Pending`.
-3. Найди причину через `describe`.
-4. Создай tainted node.
-5. Запусти Pod без toleration — получи `Pending`.
-6. Добавь toleration.
-7. Добавь topology spread.
-
-### Вопросы
-
-1. Как scheduler выбирает node?
-2. Почему Pod может быть Pending при свободной CPU?
-3. В чём разница taint и toleration?
-4. Когда использовать affinity?
-
----
-
-# Модуль 11. Scaling: HPA, Karpenter, Managed Node Groups и Auto Mode
-
-## 11.1 Два уровня autoscaling
-
-```text
-           Workload
-              |
-             HPA
-              |
-        больше replicas
-              |
-       Scheduler asks:
-         нужны nodes
-              |
-       Karpenter / MNG / Auto Mode
-              |
-         больше capacity
-```
-
-## 11.2 HPA
+## 8.2 Horizontal Pod Autoscaler (HPA)
 
 ```yaml
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: api
+  name: payments-api-hpa
+  namespace: payments
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: api
-  minReplicas: 2
-  maxReplicas: 10
+    name: payments-api
+  minReplicas: 3
+  maxReplicas: 20
   metrics:
     - type: Resource
       resource:
@@ -1602,1465 +1047,1270 @@ spec:
           averageUtilization: 70
 ```
 
-Проверка:
+Для метрик, отличных от CPU/памяти (длина очереди SQS, RPS), нужен `metrics-server` (для CPU/памяти он обязателен всегда) плюс адаптер вроде KEDA или Prometheus Adapter.
+
+## 8.3 Vertical Pod Autoscaler (VPA)
+
+VPA подбирает оптимальные `requests`/`limits` на основе фактического потребления, а не число реплик:
+
+```yaml
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: payments-api-vpa
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: payments-api
+  updatePolicy:
+    updateMode: "Off"  # только рекомендации, без авто-применения
+```
+
+`updateMode: "Off"` — безопасный режим для начала: VPA просто показывает рекомендации, вы решаете сами. `Auto` пересоздаёт поды с новыми ресурсами — может быть рискованно вместе с HPA по CPU (не рекомендуется комбинировать VPA-Auto и HPA-по-CPU на одном объекте).
+
+## 8.4 Cluster Autoscaler — классический подход
+
+Работает поверх Auto Scaling Groups: смотрит на unschedulable поды и увеличивает `desiredCapacity` нужной ASG, либо уменьшает её, когда узлы простаивают.
 
 ```bash
-kubectl get hpa
-kubectl describe hpa api
+helm install cluster-autoscaler autoscaler/cluster-autoscaler \
+  --namespace kube-system \
+  --set autoDiscovery.clusterName=demo-cluster \
+  --set awsRegion=eu-central-1
 ```
 
-## 11.3 Ключевой момент
+Каждая managed node group должна быть помечена тегами для авто-обнаружения:
 
-HPA без capacity scaling может привести к:
-
-```text
-HPA: replicas 2 -> 10
-             |
-Scheduler: 8 Pods Pending
-             |
-No new nodes
+```
+k8s.io/cluster-autoscaler/demo-cluster = owned
+k8s.io/cluster-autoscaler/enabled = true
 ```
 
-Поэтому нужен второй уровень.
+Ограничение Cluster Autoscaler: он думает в терминах "нод-групп" и заранее заданных типов инстансов — если под не влезает ни в одну существующую группу, он не поможет.
 
-## 11.4 Managed Node Groups scaling
+## 8.5 Karpenter — современная альтернатива
 
-Node group имеет min/desired/max. Для предсказуемых baseline workload это простой вариант.
+Karpenter не работает через ASG — он напрямую запускает EC2-инстансы нужного размера под конкретные unschedulable поды, выбирая оптимальный тип инстанса "на лету" из широкого пула.
 
-## 11.5 Karpenter
-
-Karpenter автоматически provisioning/deprovisioning nodes на основании unschedulable Pods и их constraints. AWS best practices отдельно рекомендуют pin tested AMIs в production и отмечают, что Karpenter хорошо подходит для изменчивой или разнообразной capacity потребности. https://aws.github.io/aws-eks-best-practices/karpenter/
-
-Модель:
-
-```text
-Pending Pod
-   |
-Karpenter анализирует:
-   - resources
-   - zone
-   - instance types
-   - taints
-   - affinity
-   - architecture
-   |
-создаёт подходящий node
+```yaml
+apiVersion: karpenter.sh/v1
+kind: NodePool
+metadata:
+  name: default
+spec:
+  template:
+    spec:
+      requirements:
+        - key: kubernetes.io/arch
+          operator: In
+          values: ["amd64"]
+        - key: karpenter.sh/capacity-type
+          operator: In
+          values: ["spot", "on-demand"]
+      nodeClassRef:
+        group: karpenter.k8s.aws
+        kind: EC2NodeClass
+        name: default
+  limits:
+    cpu: 1000
+  disruption:
+    consolidationPolicy: WhenEmptyOrUnderutilized
+    consolidateAfter: 30s
 ```
 
-## 11.6 NodePool thinking
+Karpenter умеет "консолидировать" узлы — объединять недогруженные поды на меньшее число узлов, экономя деньги, и делает это быстрее, чем классический Cluster Autoscaler (секунды, а не минуты для решения "какой инстанс поднять").
 
-Ты задаёшь policy:
+## 8.6 Cluster Autoscaler vs Karpenter
 
-```text
-NodePool:
-  capacity-type = on-demand/spot
-  architectures = amd64/arm64
-  zones = ...
-  instance-family = ...
-  limits = ...
-```
+| | Cluster Autoscaler | Karpenter |
+|---|---|---|
+| Работает через | Auto Scaling Groups | Напрямую EC2 API |
+| Гибкость выбора типа инстанса | Ограничена заранее созданными node group | Динамический выбор из широкого пула |
+| Скорость реакции | Обычно медленнее | Обычно быстрее |
+| Консолидация узлов | Ограниченная | Встроенная и гибкая |
+| Зрелость/поддержка | Давно существует, предсказуем | Активно развивается, нативен для AWS |
 
-И workload через requests/constraints влияет на выбор capacity.
+Для новых кластеров AWS сейчас в целом рекомендует Karpenter, но Cluster Autoscaler остаётся валидным и хорошо изученным выбором, особенно если инфраструктура уже завязана на конкретные node group.
 
-## 11.7 Auto Mode
+## 8.7 Scale to zero и cold start
 
-Auto Mode расширяет automation compute infrastructure и включает capabilities для node provisioning, load balancing, storage и networking. https://docs.aws.amazon.com/eks/latest/userguide/automode.html
-
-## 11.8 Когда что использовать
-
-| Нагрузка | Подход |
-|---|---|
-| стабильный baseline | Managed Node Group |
-| резкие пики | Karpenter / Auto Mode |
-| сложная diversity instance types | Karpenter |
-| минимум node management | Auto Mode |
-| legacy operational model | MNG |
+И Karpenter, и Cluster Autoscaler могут увести `desiredCapacity`/число узлов в 0, когда нагрузки нет — но учитывайте cold start: новый узел поднимается не мгновенно (обычно 30-90 секунд), это стоит закладывать в SLA, если трафик может резко появиться.
 
 ### Практика
 
-1. Настрой Deployment на 2 replicas.
-2. Подключи HPA.
-3. Создай нагрузку.
-4. Наблюдай рост replicas.
-5. Убедись, хватает ли nodes.
-6. На отдельном lab cluster попробуй Karpenter.
+1. Настройте HPA по CPU для тестового деплоймента, нагрузите его через `kubectl run --image=busybox -- wget -O- ...` в цикле, понаблюдайте за скейлингом
+2. Установите Cluster Autoscaler или Karpenter, специально создайте под, который не влезает по ресурсам, дождитесь появления нового узла
+3. Настройте VPA в режиме `Off`, посмотрите на рекомендации через `kubectl describe vpa`
 
-### Вопросы
+### Вопросы для самопроверки
 
-1. Почему HPA не равен cluster autoscaler?
-2. Что делает Karpenter?
-3. Когда MNG проще?
-4. Что берёт на себя Auto Mode?
+1. Чем скейлинг подов принципиально отличается от скейлинга узлов?
+2. Почему не рекомендуется совмещать VPA в режиме `Auto` с HPA по CPU?
+3. В чём ключевое архитектурное отличие Karpenter от Cluster Autoscaler?
 
 ---
 
-# Модуль 12. High Availability и graceful disruptions
+# Модуль 9. Ingress и балансировка: AWS Load Balancer Controller
 
-## 12.1 HA — не просто 3 replicas
+## 9.1 Зачем отдельный контроллер, если Service уже умеет LoadBalancer
 
-Плохо:
+`Service` типа `LoadBalancer` в EKS по умолчанию (через встроенный in-tree провайдер) создаёт Classic Load Balancer — устаревший, менее гибкий тип. AWS Load Balancer Controller — отдельный компонент, который умеет создавать современные Network Load Balancer (NLB) и Application Load Balancer (ALB) с полной поддержкой `Ingress`, path-based роутинга, TLS-терминации и т.д.
 
-```text
-AZ-a
-  pod-1
-  pod-2
-  pod-3
+## 9.2 Установка
+
+```bash
+eksctl create iamserviceaccount \
+  --cluster demo-cluster \
+  --namespace kube-system \
+  --name aws-load-balancer-controller \
+  --attach-policy-arn arn:aws:iam::123456789012:policy/AWSLoadBalancerControllerIAMPolicy \
+  --approve
+
+helm repo add eks https://aws.github.io/eks-charts
+helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
+  --namespace kube-system \
+  --set clusterName=demo-cluster \
+  --set serviceAccount.create=false \
+  --set serviceAccount.name=aws-load-balancer-controller
 ```
 
-Лучше:
+## 9.3 ALB через Ingress
 
-```text
-AZ-a      AZ-b      AZ-c
-pod-1     pod-2     pod-3
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: payments-ingress
+  namespace: payments
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:eu-central-1:123456789012:certificate/abc-123
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+spec:
+  rules:
+    - host: api.example.com
+      http:
+        paths:
+          - path: /payments
+            pathType: Prefix
+            backend:
+              service:
+                name: payments-api
+                port:
+                  number: 80
 ```
 
-## 12.2 PDB
+`target-type: ip` направляет трафик от ALB напрямую на IP подов (через VPC CNI), минуя kube-proxy — это снижает лишний хоп и даёт более точную балансировку, чем `target-type: instance`.
 
-PodDisruptionBudget защищает минимальную доступность при добровольных disruptions.
+## 9.4 NLB через Service
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: payments-tcp
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: nlb
+    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+spec:
+  type: LoadBalancer
+  selector:
+    app: payments-api
+  ports:
+    - port: 5432
+      targetPort: 5432
+```
+
+NLB выбирают, когда нужна работа на уровне L4 (TCP/UDP), крайне низкая задержка, или статические IP-адреса для whitelisting клиентами.
+
+## 9.5 ALB vs NLB: когда что
+
+| | ALB | NLB |
+|---|---|---|
+| Уровень | L7 (HTTP/HTTPS) | L4 (TCP/UDP) |
+| Path/host-based роутинг | Да | Нет |
+| TLS-терминация | Да, с ACM | Есть TLS passthrough/termination, но проще на ALB |
+| Задержка | Чуть выше | Минимальная |
+| Статический IP | Нет (через Elastic IP можно частично) | Да |
+
+## 9.6 Внешний DNS через external-dns
+
+Чтобы не создавать записи в Route 53 вручную после каждого создания Ingress:
+
+```bash
+helm install external-dns external-dns/external-dns \
+  --namespace kube-system \
+  --set provider=aws \
+  --set txtOwnerId=demo-cluster
+```
+
+С аннотацией `external-dns.alpha.kubernetes.io/hostname: api.example.com` на `Ingress`/`Service` DNS-запись создастся и обновится автоматически.
+
+### Практика
+
+1. Установите AWS Load Balancer Controller через Helm с IRSA
+2. Создайте `Ingress` с ALB для двух разных сервисов по path-based роутингу (`/payments`, `/analytics`)
+3. Привяжите TLS-сертификат из ACM
+4. Установите `external-dns` и убедитесь, что запись в Route 53 создаётся автоматически
+
+### Вопросы для самопроверки
+
+1. Чем ALB через AWS Load Balancer Controller лучше стандартного Service типа LoadBalancer?
+2. Когда выбрать NLB вместо ALB?
+3. Что делает `target-type: ip` и почему это обычно лучше, чем `instance`?
+
+---
+
+# Модуль 10. Логи и метрики: CloudWatch, Prometheus, Grafana
+
+## 10.1 Два основных подхода к observability в EKS
+
+- **Нативный AWS-стек**: CloudWatch Container Insights + CloudWatch Logs — минимум настройки, платите за AWS
+- **CNCF-стек**: Prometheus + Grafana (+ Loki для логов) — больше контроля и гибкости, обычно дешевле при больших объёмах, но требует эксплуатации самим
+
+Многие продакшен-кластеры используют оба: CloudWatch для базового алертинга и логов, Prometheus/Grafana — для детальных дашбордов и продвинутого алертинга.
+
+## 10.2 CloudWatch Container Insights
+
+```bash
+aws eks create-addon \
+  --cluster-name demo-cluster \
+  --addon-name amazon-cloudwatch-observability
+```
+
+Этот аддон разворачивает CloudWatch Agent как DaemonSet, автоматически собирает метрики по узлам/подам/контейнерам и присылает их в CloudWatch, плюс логи через Fluent Bit.
+
+## 10.3 Логи через Fluent Bit в CloudWatch Logs
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluent-bit-config
+  namespace: amazon-cloudwatch
+data:
+  output.conf: |
+    [OUTPUT]
+        Name cloudwatch_logs
+        Match *
+        region eu-central-1
+        log_group_name /aws/eks/demo-cluster/application
+        log_stream_prefix from-fluent-bit-
+        auto_create_group true
+```
+
+## 10.4 Prometheus + Grafana через Helm
+
+```bash
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+  --namespace monitoring --create-namespace
+```
+
+Этот чарт разом ставит Prometheus, Alertmanager, Grafana и набор готовых дашбордов/правил для базовых Kubernetes-метрик (использование CPU/памяти по подам/узлам, здоровье control plane метрик через kube-state-metrics и node-exporter).
+
+## 10.5 Managed Prometheus и Managed Grafana от AWS
+
+Если не хочется эксплуатировать Prometheus/Grafana самим — AWS предлагает Amazon Managed Service for Prometheus (AMP) и Amazon Managed Grafana (AMG), совместимые с open-source экосистемой, но без забот об их инфраструктуре и HA.
+
+## 10.6 Метрики control plane
+
+EKS даёт доступ к метрикам самого control plane (API server request latency, etcd-related метрики) через CloudWatch — включается отдельно:
+
+```bash
+aws eks update-cluster-config \
+  --name demo-cluster \
+  --logging '{"clusterLogging":[{"types":["api","audit","authenticator","controllerManager","scheduler"],"enabled":true}]}'
+```
+
+Включайте только нужные типы логов — `audit` логи особенно объёмные и платные при большом кластере.
+
+## 10.7 Алертинг
+
+```yaml
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: payments-alerts
+  namespace: monitoring
+spec:
+  groups:
+    - name: payments
+      rules:
+        - alert: HighErrorRate
+          expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.05
+          for: 10m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Высокий процент 5xx у payments-api"
+```
+
+### Практика
+
+1. Включите `amazon-cloudwatch-observability` аддон, посмотрите на дашборды Container Insights
+2. Установите `kube-prometheus-stack`, откройте Grafana, найдите дашборд по использованию ресурсов кластера
+3. Включите control plane логирование только для `api` и `audit`, посмотрите записи в CloudWatch Logs
+4. Настройте один алерт правило в Prometheus на превышение error rate
+
+### Вопросы для самопроверки
+
+1. Какие плюсы у CNCF-стека (Prometheus/Grafana) по сравнению с CloudWatch Container Insights?
+2. Почему стоит включать не все типы control plane логов подряд?
+3. Зачем нужны Managed Prometheus/Grafana, если можно поставить их самим через Helm?
+
+---
+
+# Модуль 11. CI/CD: ECR, GitHub Actions, ArgoCD
+
+## 11.1 ECR — реестр образов
+
+```bash
+aws ecr create-repository --repository-name payments-api
+
+aws ecr get-login-password --region eu-central-1 | \
+  docker login --username AWS --password-stdin 123456789012.dkr.ecr.eu-central-1.amazonaws.com
+
+docker build -t payments-api .
+docker tag payments-api:latest 123456789012.dkr.ecr.eu-central-1.amazonaws.com/payments-api:1.4.2
+docker push 123456789012.dkr.ecr.eu-central-1.amazonaws.com/payments-api:1.4.2
+```
+
+Включите сканирование образов на уязвимости прямо в ECR:
+
+```bash
+aws ecr put-image-scanning-configuration \
+  --repository-name payments-api \
+  --image-scanning-configuration scanOnPush=true
+```
+
+## 11.2 Два подхода к деплою: push-based и GitOps (pull-based)
+
+- **Push-based**: CI-пайплайн сам вызывает `kubectl apply`/`helm upgrade` в конце сборки
+- **GitOps (pull-based)**: CI только собирает образ и обновляет манифест в git-репозитории; отдельный контроллер в кластере (ArgoCD/Flux) сам вытягивает изменения и применяет их
+
+GitOps считается более безопасным и предсказуемым для продакшена: у CI-раннера не должно быть прямого доступа к кластеру, вся история изменений — в git, откат — это `git revert`.
+
+## 11.3 GitHub Actions: сборка и push в ECR
+
+```yaml
+name: build-and-push
+on:
+  push:
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::123456789012:role/github-actions-ecr-push
+          aws-region: eu-central-1
+      - name: Login to ECR
+        run: aws ecr get-login-password | docker login --username AWS --password-stdin 123456789012.dkr.ecr.eu-central-1.amazonaws.com
+      - name: Build and push
+        run: |
+          docker build -t payments-api:${{ github.sha }} .
+          docker tag payments-api:${{ github.sha }} 123456789012.dkr.ecr.eu-central-1.amazonaws.com/payments-api:${{ github.sha }}
+          docker push 123456789012.dkr.ecr.eu-central-1.amazonaws.com/payments-api:${{ github.sha }}
+```
+
+Обратите внимание: `role-to-assume` через OIDC — не статические AWS-ключи в секретах GitHub. GitHub Actions поддерживает OIDC federation с IAM так же, как поды поддерживают IRSA.
+
+## 11.4 ArgoCD: GitOps-деплой
+
+```bash
+kubectl create namespace argocd
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+```
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: payments-api
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/your-org/payments-manifests.git
+    targetRevision: main
+    path: overlays/prod
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: payments
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+```
+
+`selfHeal: true` значит: если кто-то вручную поменяет что-то в кластере через `kubectl edit` в обход git, ArgoCD автоматически откатит это обратно к состоянию в репозитории — единственный источник правды остаётся git.
+
+## 11.5 Канареечные и blue/green деплои
+
+Для более плавного раската — Argo Rollouts поверх ArgoCD:
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: payments-api
+spec:
+  strategy:
+    canary:
+      steps:
+        - setWeight: 10
+        - pause: { duration: 5m }
+        - setWeight: 50
+        - pause: { duration: 5m }
+        - setWeight: 100
+```
+
+### Практика
+
+1. Настройте ECR-репозиторий со сканированием при push
+2. Соберите пайплайн GitHub Actions с OIDC-доступом (без статических ключей) до ECR
+3. Установите ArgoCD, подключите Application, указывающий на git-репозиторий с манифестами
+4. Вручную измените что-то в кластере через `kubectl edit` и убедитесь, что ArgoCD откатывает изменение обратно (`selfHeal: true`)
+
+### Вопросы для самопроверки
+
+1. В чём разница между push-based и pull-based (GitOps) деплоем?
+2. Зачем использовать OIDC federation для GitHub Actions вместо статических AWS-ключей?
+3. Что делает `selfHeal: true` в ArgoCD Application?
+
+---
+
+# Модуль 12. Секреты и конфигурация
+
+## 12.1 Проблема голого Kubernetes Secret
+
+Стандартный `Secret` в Kubernetes хранится в `etcd` в base64 (не шифрование, а просто кодирование) — если etcd не зашифрован at-rest, секреты фактически лежат почти открытым текстом. У EKS есть встроенное шифрование etcd через KMS, но даже с ним секреты, попавшие в git как plain YAML — постоянный риск.
+
+## 12.2 Encryption at rest через KMS для секретов
+
+```bash
+eksctl utils enable-secrets-encryption \
+  --cluster demo-cluster \
+  --key-arn arn:aws:kms:eu-central-1:123456789012:key/abc-123
+```
+
+Это дополнительный слой поверх дефолтного шифрования EBS/etcd — секреты Kubernetes шифруются envelope-encryption через ваш собственный KMS-ключ, а не только встроенным AWS-managed ключом.
+
+## 12.3 AWS Secrets Manager + External Secrets Operator
+
+Правильный паттерн: секреты живут в AWS Secrets Manager (с ротацией, аудитом через CloudTrail), а в Kubernetes попадают через оператор, который синхронизирует их в обычный `Secret` объект.
+
+```bash
+helm repo add external-secrets https://charts.external-secrets.io
+helm install external-secrets external-secrets/external-secrets \
+  --namespace external-secrets --create-namespace
+```
+
+```yaml
+apiVersion: external-secrets.io/v1beta1
+kind: SecretStore
+metadata:
+  name: aws-secrets-manager
+  namespace: payments
+spec:
+  provider:
+    aws:
+      service: SecretsManager
+      region: eu-central-1
+      auth:
+        jwt:
+          serviceAccountRef:
+            name: payments-api-sa
+```
+
+```yaml
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: payments-db-credentials
+  namespace: payments
+spec:
+  secretStoreRef:
+    name: aws-secrets-manager
+    kind: SecretStore
+  target:
+    name: payments-db-credentials
+  data:
+    - secretKey: password
+      remoteRef:
+        key: prod/payments/db
+        property: password
+```
+
+Обратите внимание: `SecretStore` использует тот же `ServiceAccount` с IRSA/Pod Identity — доступ к Secrets Manager получается через IAM, без отдельных credentials для самого оператора.
+
+## 12.4 AWS Systems Manager Parameter Store как альтернатива
+
+Для менее чувствительной конфигурации (не секретов, а просто параметров, которые меняются между окружениями) часто используют SSM Parameter Store — он бесплатнее для стандартных параметров, чем Secrets Manager с его ротацией.
+
+## 12.5 ConfigMap для обычной конфигурации
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: payments-api-config
+  namespace: payments
+data:
+  LOG_LEVEL: "info"
+  FEATURE_NEW_CHECKOUT: "true"
+```
+
+```yaml
+envFrom:
+  - configMapRef:
+      name: payments-api-config
+  - secretRef:
+      name: payments-db-credentials
+```
+
+## 12.6 Ротация секретов
+
+Secrets Manager умеет автоматически ротировать секреты (например, пароли RDS) через Lambda-функцию по расписанию. External Secrets Operator при этом периодически перечитывает значение из Secrets Manager (`refreshInterval`) и обновляет Kubernetes `Secret` — но приложение должно уметь подхватывать новый секрет без перезапуска, либо нужен механизм рестарта пода при смене секрета (например, Reloader).
+
+### Практика
+
+1. Включите шифрование секретов через собственный KMS-ключ
+2. Создайте секрет в AWS Secrets Manager
+3. Установите External Secrets Operator и синхронизируйте секрет в Kubernetes `Secret` через IRSA
+4. Настройте `refreshInterval` и проверьте, что изменение значения в Secrets Manager подтягивается автоматически
+
+### Вопросы для самопроверки
+
+1. Почему стандартный Kubernetes `Secret` без дополнительных мер — не полноценная защита?
+2. Зачем нужен External Secrets Operator, если можно просто класть секреты напрямую как Kubernetes `Secret`?
+3. Чем Parameter Store отличается от Secrets Manager по назначению?
+
+---
+
+# Модуль 13. Multi-cluster и мульти-аккаунт
+
+## 13.1 Зачем несколько кластеров вместо одного большого
+
+- Изоляция окружений (dev/staging/prod) — ошибка в staging не должна физически задевать prod
+- Изоляция по географии/региону — latency и требования резидентности данных
+- Blast radius — если один кластер полностью выйдет из строя, не должны упасть все сервисы компании разом
+- Ограничения масштабирования одного control plane при очень большом числе объектов
+
+## 13.2 Паттерн "один аккаунт AWS на окружение"
+
+Частая практика: отдельный AWS-аккаунт под `dev`, `staging`, `prod` — root-уровневая изоляция биллинга, IAM, лимитов. Управляется через AWS Organizations, доступ между аккаунтами — через cross-account IAM роли, а не через шаринг credentials.
+
+## 13.3 Terraform для мульти-кластерной инфраструктуры
+
+```hcl
+module "eks_prod" {
+  source          = "terraform-aws-modules/eks/aws"
+  cluster_name    = "prod-cluster"
+  cluster_version = "1.30"
+  vpc_id          = module.vpc_prod.vpc_id
+  subnet_ids      = module.vpc_prod.private_subnets
+
+  eks_managed_node_groups = {
+    default = {
+      instance_types = ["m5.large"]
+      min_size       = 3
+      max_size       = 10
+      desired_size   = 3
+    }
+  }
+}
+```
+
+Terraform-модуль `terraform-aws-modules/eks/aws` — фактический стандарт для управления EKS-инфраструктурой как кодом, если команда предпочитает Terraform вместо `eksctl`.
+
+## 13.4 Централизованный доступ через Access Entries на несколько кластеров
+
+Если у команды несколько кластеров, разумно унифицировать управление доступом: единая IAM-роль на "SRE-инженера" привязывается через Access Entries к каждому кластеру с соответствующим уровнем прав, а не заводится россыпь локальных пользователей.
+
+## 13.5 Service mesh между кластерами (кратко)
+
+Для взаимодействия сервисов из разных кластеров (например, prod в двух регионах) используют service mesh с multi-cluster поддержкой (Istio, App Mesh) или API Gateway между кластерами. Это отдельная большая тема, выходящая за рамки вводного курса — важно на этом этапе просто понимать, что "один сервис — один кластер" не масштабируется без явного связующего слоя.
+
+## 13.6 Общий Terraform state и модульность
+
+Отдельный `tfstate` на каждый кластер/окружение — стандартная практика, чтобы ошибка в dev не могла случайно повлиять на state прод-кластера. Удалённый backend (S3 + DynamoDB для locking, либо Terraform Cloud) обязателен при командной работе.
+
+### Практика
+
+1. Опишите инфраструктуру двух окружений (`dev`, `prod`) через Terraform-модуль `terraform-aws-modules/eks/aws` с раздельными state-файлами
+2. Настройте Access Entries так, чтобы один и тот же IAM-принципал имел разные права в `dev` (admin) и `prod` (read-only)
+
+### Вопросы для самопроверки
+
+1. Какие причины есть заводить несколько кластеров вместо одного большого?
+2. Зачем разделять AWS-аккаунты по окружениям, а не просто namespace внутри одного кластера?
+3. Почему важно держать раздельный Terraform state для разных кластеров?
+
+---
+
+# Модуль 14. Обновление и обслуживание кластера
+
+## 14.1 Что обновляется раздельно
+
+1. Control plane (версия Kubernetes)
+2. Node groups (версия Kubernetes на узлах + AMI)
+3. EKS Add-ons (vpc-cni, coredns, kube-proxy, ebs-csi и т.д.)
+
+Все три обновляются отдельными операциями и должны обновляться в правильном порядке.
+
+## 14.2 Обновление control plane
+
+```bash
+eksctl upgrade cluster --name demo-cluster --version 1.31 --approve
+```
+
+Control plane обновляется без простоя API (AWS делает rolling upgrade managed control plane), но это не значит, что можно прыгать через версии — только последовательно, на одну минорную версию за раз.
+
+## 14.3 Обновление узлов
+
+```bash
+eksctl upgrade nodegroup \
+  --cluster demo-cluster \
+  --name standard-workers \
+  --kubernetes-version 1.31
+```
+
+Managed node group при апгрейде делает rolling replacement узлов: поднимает новые с новой версией, аккуратно `cordon`+`drain` старые, ждёт готовности подов на новых узлах перед тем как убить старый. Важно, чтобы у приложений были настроены `PodDisruptionBudget`, иначе drain может увести в down сразу все реплики:
 
 ```yaml
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: api
+  name: payments-api-pdb
+  namespace: payments
 spec:
   minAvailable: 2
   selector:
     matchLabels:
-      app: api
+      app: payments-api
 ```
 
-## 12.3 Deployment strategy
-
-```yaml
-strategy:
-  type: RollingUpdate
-  rollingUpdate:
-    maxUnavailable: 0
-    maxSurge: 1
-```
-
-## 12.4 Graceful shutdown
-
-Приложение должно:
-
-1. перестать принимать новые requests;
-2. дождаться текущих requests;
-3. завершиться в пределах termination grace period.
-
-```yaml
-terminationGracePeriodSeconds: 30
-```
-
-## 12.5 Topology spread
-
-Проверяй:
+## 14.4 Обновление аддонов
 
 ```bash
-kubectl get pods -l app=api -o wide
+aws eks update-addon \
+  --cluster-name demo-cluster \
+  --addon-name vpc-cni \
+  --addon-version v1.18.1-eksbuild.1 \
+  --resolve-conflicts OVERWRITE
 ```
 
-И распределение по zone:
+`--resolve-conflicts OVERWRITE` нужен, если вы вручную меняли конфигурацию аддона (например, переменные окружения VPC CNI) — иначе обновление может остановиться на конфликте.
+
+## 14.5 Порядок безопасного обновления
+
+```
+1. проверить состояние кластера (health, деплойменты все Running)
+2. обновить control plane на одну минорную версию
+3. обновить EKS Add-ons до совместимых версий
+4. обновить node groups (по одной, не все разом, если групп несколько)
+5. проверить, что приложения по-прежнему здоровы
+6. повторить для следующей минорной версии, если нужно продвинуться дальше
+```
+
+## 14.6 Blue/green апгрейд узлов вместо in-place
+
+Вместо upgrade существующей node group иногда безопаснее создать новую node group с новой версией, постепенно перевести на неё нагрузку (через `cordon` старой + скейлинг новой), а затем удалить старую — даёт возможность быстро откатиться, просто раскейлив старую группу обратно.
+
+## 14.7 Deprecated API при апгрейде
+
+Каждая минорная версия Kubernetes может убирать устаревшие API (классика — `extensions/v1beta1` для Ingress в далёком прошлом). Перед апгрейдом обязательно проверяйте манифесты и Helm-чарты на использование deprecated/removed API:
 
 ```bash
-kubectl get nodes -L topology.kubernetes.io/zone
+kubectl-convert -f old-manifest.yaml --output-version apps/v1
 ```
 
-## 12.6 Availability зависит от приложения
+Или используйте специализированные инструменты вроде `kubent` (kube-no-trouble) для сканирования всего кластера на использование устаревших API перед апгрейдом.
 
-Если Deployment HA, а база — один Pod без backup, система всё равно не HA.
+### Практика
 
-```text
-Frontend HA
-   |
-API HA
-   |
-DB single point of failure  <-- проблема
+1. Настройте `PodDisruptionBudget` для тестового деплоймента
+2. Обновите node group на одну минорную версию, понаблюдайте за rolling replacement через `kubectl get nodes -w`
+3. Проверьте манифесты кластера на использование deprecated API перед условным будущим апгрейдом
+
+### Вопросы для самопроверки
+
+1. В каком порядке безопасно обновлять control plane, аддоны и node groups?
+2. Зачем нужен `PodDisruptionBudget` именно во время апгрейда узлов?
+3. Почему нельзя перепрыгивать через минорные версии Kubernetes при апгрейде?
+
+---
+
+# Модуль 15. Стоимость и оптимизация
+
+## 15.1 Из чего складывается счёт за EKS
+
+- Плата за control plane — фиксированная почасовая ставка за каждый кластер
+- EC2-инстансы worker-узлов (или vCPU/память Fargate-подов)
+- EBS-тома, снапшоты
+- Load Balancer'ы (ALB/NLB) — почасовая плата + плата за обработанный трафик
+- NAT Gateway — почасовая плата + плата за трафик через него (часто недооценённая статья расходов)
+- Исходящий трафик (data transfer) между AZ и наружу
+- CloudWatch Logs/метрики при большом объёме
+
+## 15.2 Самые частые причины раздутого счёта
+
+- Overprovisioned `requests` — приложение просит 2 CPU "на всякий случай", реально использует 200m, а Cluster Autoscaler/Karpenter честно держит под это лишние узлы
+- Отсутствие HPA — держат фиксированное большое число реплик под пиковую нагрузку круглосуточно
+- Один NAT Gateway на AZ вместо экономии через VPC Endpoints для трафика к AWS-сервисам
+- Дублирующиеся Load Balancer'ы вместо одного Ingress с path-based роутингом на несколько сервисов
+- Логи "на всякий случай" без retention policy — CloudWatch Logs копятся бесконечно
+
+## 15.3 Spot-инстансы для несрочных нагрузок
+
+```yaml
+managedNodeGroups:
+  - name: spot-workers
+    instanceTypes: ["t3.medium", "t3a.medium", "t3.large"]
+    spot: true
+    minSize: 0
+    maxSize: 20
+```
+
+Spot-инстансы стоят на 60-90% дешевле on-demand, но могут быть вытеснены AWS с уведомлением за 2 минуты. Подходят для: batch-джобов, stateless-сервисов с достаточным числом реплик, CI-раннеров. Не подходят для: одиночных stateful-подов без репликации.
+
+## 15.4 Karpenter consolidation для экономии
+
+Как упоминалось в модуле 8, Karpenter умеет активно "сжимать" число узлов, переселяя поды на меньшее количество более полно загруженных инстансов — это прямой способ снизить счёт без ручного вмешательства.
+
+## 15.5 Savings Plans и Reserved Instances для базовой нагрузки
+
+Если у кластера есть предсказуемый "пол" нагрузки (минимум узлов, которые точно всегда нужны) — на них стоит взять Compute Savings Plans или Reserved Instances, а поверх — spot/on-demand для переменной части.
+
+## 15.6 Right-sizing через VPA-рекомендации
+
+VPA в режиме `Off` (модуль 8) даёт честную картину, сколько ресурсов реально нужно приложению — используйте эти рекомендации, чтобы не гадать с `requests`/`limits`.
+
+## 15.7 AWS Cost Explorer + Kubecost
+
+Для детальной разбивки "какой namespace/деплоймент сколько стоит" (Cost Explorer сам по себе не знает про Kubernetes-объекты) используют Kubecost или встроенный AWS Split Cost Allocation Data для EKS, который умеет разбивать счёт по namespace/label.
+
+```bash
+helm install kubecost cost-analyzer/cost-analyzer \
+  --namespace kubecost --create-namespace \
+  --set kubecostToken="<token>"
 ```
 
 ### Практика
 
-1. Сделай 3 replicas.
-2. Разнеси по AZ.
-3. Добавь PDB.
-4. Сделай rolling update.
-5. Искусственно drain node в тестовой среде.
-6. Проверь, сколько Pod остаётся доступно.
+1. Настройте VPC Endpoints для ECR/S3, отключите (или сравните трафик до/после) прохождение через NAT Gateway
+2. Найдите в кластере деплойменты с явно завышенными `requests` через VPA-рекомендации
+3. Переведите некритичную нагрузку (например, batch-джобы) на spot node group
+4. Установите Kubecost и посмотрите разбивку стоимости по namespace
 
-### Вопросы
+### Вопросы для самопроверки
 
-1. Что защищает PDB?
-2. Почему PDB не защищает от любой аварии?
-3. Зачем topology spread?
-4. Почему graceful shutdown важен за Load Balancer?
+1. Какие статьи расходов в EKS чаще всего оказываются неожиданно большими?
+2. Почему overprovisioned `requests` напрямую увеличивают счёт, даже если реальной утилизации CPU почти нет?
+3. Для какого типа нагрузки spot-инстансы не подходят и почему?
 
 ---
 
-# Модуль 13. Security: Pod Security, NetworkPolicy, SG, KMS
+# Модуль 16. Безопасность EKS
 
-## 13.1 Defense in depth
+## 16.1 Модель разделённой ответственности
 
-```text
-AWS IAM
-   |
-EKS access
-   |
-RBAC
-   |
-Pod Security
-   |
-NetworkPolicy
-   |
-Security Groups
-   |
-Application auth
+AWS отвечает за безопасность control plane (патчи, изоляция, шифрование etcd). Вы отвечаете за: безопасность образов, конфигурацию сети внутри кластера, IAM-права подов, патчи ОС узлов (если не Fargate), политики допуска подов.
+
+## 16.2 Pod Security Standards
+
+Начиная с Kubernetes 1.25 `PodSecurityPolicy` заменён на `Pod Security Standards`, применяемые через labels на namespace:
+
+```bash
+kubectl label namespace payments \
+  pod-security.kubernetes.io/enforce=restricted \
+  pod-security.kubernetes.io/audit=restricted
 ```
 
-Ни один слой не заменяет другой.
+`restricted` запрещает privileged-контейнеры, требует непривилегированного пользователя, запрещает hostNetwork/hostPID и т.д. — базовая гигиена для продакшен-namespace.
 
-## 13.2 Pod Security
-
-Не запускай всё как:
-
-```yaml
-securityContext:
-  privileged: true
-```
-
-Базовый production mindset:
+## 16.3 Ограничение контейнера на уровне манифеста
 
 ```yaml
 securityContext:
   runAsNonRoot: true
-  allowPrivilegeEscalation: false
+  runAsUser: 1000
   readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
   capabilities:
     drop: ["ALL"]
 ```
 
-Не все приложения сразу совместимы с этими настройками — тестируй.
+## 16.4 GuardDuty for EKS
 
-## 13.3 NetworkPolicy
+```bash
+aws guardduty create-detector --enable
+aws guardduty update-detector \
+  --detector-id <id> \
+  --features '[{"Name":"EKS_AUDIT_LOGS","Status":"ENABLED"},{"Name":"EKS_RUNTIME_MONITORING","Status":"ENABLED"}]'
+```
 
-Пример: разрешить backend только к frontend:
+GuardDuty анализирует Kubernetes audit logs и рантайм-поведение подов, ищет аномалии: попытки эскалации привилегий, подозрительные API-вызовы, коммуникацию с известными вредоносными IP.
+
+## 16.5 Сканирование образов
+
+Уже упоминалось в модуле 11 — включайте `scanOnPush` в ECR. Для более глубокого сканирования (не только известные CVE, но и политика допустимости) используют Trivy или AWS Inspector for ECR:
+
+```bash
+trivy image 123456789012.dkr.ecr.eu-central-1.amazonaws.com/payments-api:1.4.2 --severity CRITICAL,HIGH
+```
+
+## 16.6 Admission control: OPA Gatekeeper / Kyverno
+
+Чтобы физически не дать задеплоить нарушающий политику манифест (например, образ не из вашего приватного ECR, или под без `resources.limits`):
 
 ```yaml
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
 metadata:
-  name: allow-from-frontend
-  namespace: shop
+  name: require-resource-limits
 spec:
-  podSelector:
-    matchLabels:
-      app: backend
-  policyTypes:
-    - Ingress
-  ingress:
-    - from:
-        - podSelector:
-            matchLabels:
-              app: frontend
-      ports:
-        - protocol: TCP
-          port: 8080
+  validationFailureAction: Enforce
+  rules:
+    - name: check-resources
+      match:
+        resources:
+          kinds: ["Pod"]
+      validate:
+        message: "Каждый контейнер должен иметь resources.limits"
+        pattern:
+          spec:
+            containers:
+              - resources:
+                  limits:
+                    memory: "?*"
+                    cpu: "?*"
 ```
 
-AWS best practices рекомендуют layered security: Kubernetes NetworkPolicy для cluster traffic и Security Groups для AWS/VPC-level traffic. https://aws.github.io/aws-eks-best-practices/security/docs/network/
+## 16.7 Network Policy как обязательный слой (напоминание из модуля 5)
 
-## 13.4 Security Groups for Pods
+Без `NetworkPolicy` любой скомпрометированный под может достучаться до любого другого пода в кластере. Deny-by-default с явными allow-правилами — стандарт для продакшена.
 
-EKS поддерживает security groups для отдельных Pod workloads через VPC CNI. Есть enforcing modes `strict` и `standard`; выбор режима влияет на networking semantics. https://docs.aws.amazon.com/eks/latest/best-practices/sgpp.html
+## 16.8 Секреты и аудит (напоминание из модуля 12)
 
-## 13.5 Secrets encryption
+KMS-шифрование etcd для секретов + External Secrets Operator + включённые `audit` control plane логи — базовый набор для соответствия большинству compliance-требований (SOC2, ISO 27001 и т.д.).
 
-Для EKS Kubernetes 1.28+ AWS предоставляет default envelope encryption для Kubernetes API data. При необходимости можно использовать customer-managed KMS key как дополнительный контроль. https://docs.aws.amazon.com/eks/latest/userguide/envelope-encryption.html
+## 16.9 Чек-лист базовой безопасности EKS
 
-Проверять encryption:
-
-```bash
-aws eks describe-cluster \
-  --name "$CLUSTER_NAME" \
-  --region "$AWS_REGION" \
-  --query 'cluster.encryptionConfig'
 ```
-
-## 13.6 Secrets != password manager
-
-Kubernetes Secret не означает автоматически:
-
-```text
-«секрет безопасно лежит в Git»
-```
-
-В GitOps production обычно нужны внешние secret management patterns: AWS Secrets Manager/Parameter Store + operator/controller или другой approved approach.
-
-### Практика
-
-1. Сделай non-root container.
-2. Запусти read-only root filesystem.
-3. Добавь deny-by-default NetworkPolicy.
-4. Ограничь egress.
-5. Проверь IAM permissions Pod'а.
-6. Проверь KMS/encryption configuration.
-
-### Вопросы
-
-1. Почему IAM policy недостаточно?
-2. Что ограничивает NetworkPolicy?
-3. Когда SG for Pods полезен?
-4. Что делает envelope encryption?
-
----
-
-# Модуль 14. Observability: logs, metrics, events, traces
-
-## 14.1 Три главных сигнала
-
-```text
-Logs    -> что произошло
-Metrics -> сколько / насколько часто
-Traces  -> где потерялось время
-```
-
-## 14.2 Kubernetes events
-
-Самый дешёвый инструмент диагностики:
-
-```bash
-kubectl get events -A --sort-by=.lastTimestamp
-```
-
-Для Pod:
-
-```bash
-kubectl describe pod <pod>
-```
-
-## 14.3 Logs
-
-```bash
-kubectl logs deployment/api
-kubectl logs deployment/api --previous
-kubectl logs -f deployment/api
-```
-
-## 14.4 CloudWatch Observability add-on
-
-AWS предоставляет `amazon-cloudwatch-observability` add-on для CloudWatch Agent, Container Insights и Application Signals; для add-on поддерживается IAM через Pod Identity в современных сценариях. https://docs.aws.amazon.com/eks/latest/userguide/workloads-add-ons-available-eks.htmlhttps://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/install-CloudWatch-Observability-EKS-addon.html
-
-Проверка:
-
-```bash
-aws eks list-addons \
-  --cluster-name "$CLUSTER_NAME" \
-  --region "$AWS_REGION"
-```
-
-## 14.5 Prometheus
-
-Ключевые Kubernetes metrics:
-
-```text
-CPU utilization
-Memory working set
-Pod restarts
-HTTP request rate
-HTTP latency
-HTTP 5xx
-HPA desired/current replicas
-Node pressure
-Disk usage
-```
-
-## 14.6 SLI/SLO mindset
-
-Плохо:
-
-```text
-CPU < 80%
-```
-
-Гораздо полезнее:
-
-```text
-availability = 99.9%
-P95 latency < 300ms
-5xx rate < 0.1%
-```
-
-## 14.7 Метрики EKS
-
-Минимум для production:
-
-- node CPU/memory;
-- Pod restarts;
-- Pending pods;
-- HPA status;
-- API latency/errors;
-- LB target health;
-- storage usage;
-- DNS failures;
-- CNI/IP pressure;
-- application-level RED/USE metrics.
-
-### Практика
-
-1. Сломай image tag и наблюдай `ImagePullBackOff`.
-2. Найди причину через events.
-3. Включи логирование приложений.
-4. Собери CPU/memory metrics.
-5. Сформулируй два SLO для итогового проекта.
-
-### Вопросы
-
-1. Чем logs отличаются от metrics?
-2. Что первым смотреть при `Pending`?
-3. Какие SLI реально отражают пользовательское качество?
-4. Что такое error budget?
-
----
-
-# Модуль 15. Helm, Kustomize и GitOps
-
-## 15.1 Helm
-
-Создание chart:
-
-```bash
-helm create shop-api
-```
-
-Основные элементы:
-
-```text
-Chart.yaml
-values.yaml
-templates/
-_helpers.tpl
-```
-
-Install:
-
-```bash
-helm upgrade --install shop-api ./shop-api \
-  --namespace shop \
-  --create-namespace
-```
-
-## 15.2 Values
-
-```yaml
-image:
-  repository: 123456789012.dkr.ecr.eu-central-1.amazonaws.com/shop-api
-  tag: "1.0.0"
-
-replicaCount: 3
-```
-
-Production values:
-
-```text
-values-dev.yaml
-values-stage.yaml
-values-prod.yaml
-```
-
-## 15.3 Kustomize
-
-```text
-base/
-  deployment.yaml
-  service.yaml
-
-overlays/
-  dev/
-  prod/
-```
-
-Плюсы: простой patching без templating engine.
-
-## 15.4 GitOps
-
-```text
-Developer
-    |
-   Git
-    |
-  Argo CD
-    |
-Kubernetes API
-    |
-  EKS
-```
-
-Argo CD install пример:
-
-```bash
-kubectl create namespace argocd
-helm repo add argo https://argoproj.github.io/argo-helm
-helm repo update
-helm upgrade --install argocd argo/argo-cd -n argocd
-```
-
-Для production используй pinning chart version и управляемую конфигурацию.
-
-## 15.5 Что хранить в Git
-
-Хорошо:
-
-```text
-Deployment manifests
-Helm values
-NetworkPolicies
-RBAC
-HPA
-PDB
-Ingress
-```
-
-Плохо:
-
-```text
-AWS secret keys
-DB passwords
-production tokens
+[ ] Private (или Public+Private с allowlist) control plane endpoint
+[ ] IMDSv2 обязателен на всех узлах, hop-limit = 1
+[ ] Узлы в приватных подсетях, без публичных IP
+[ ] Pod Security Standards хотя бы на baseline/restricted для prod namespace
+[ ] Node IAM role минимальна, права приложений — через IRSA/Pod Identity
+[ ] Секреты через External Secrets Operator + KMS-шифрование etcd
+[ ] Network Policy: deny-by-default
+[ ] Сканирование образов включено (ECR scanOnPush + Trivy/Inspector)
+[ ] GuardDuty for EKS включён
+[ ] Control plane audit-логи собираются и хранятся
 ```
 
 ### Практика
 
-1. Упакуй сервис в Helm chart.
-2. Создай dev/prod values.
-3. Перенеси deployment в Git.
-4. Подключи Argo CD.
-5. Измени image tag в Git и наблюдай sync.
+1. Примените `restricted` Pod Security Standard к тестовому namespace, попробуйте задеплоить privileged-под — убедитесь, что он отклонён
+2. Включите GuardDuty EKS protection
+3. Установите Kyverno/OPA Gatekeeper и напишите политику, запрещающую поды без `resources.limits`
+4. Пройдитесь по чек-листу из 16.9 и отметьте, что уже сделано в вашем кластере
 
-### Вопросы
+### Вопросы для самопроверки
 
-1. Чем Helm отличается от Kustomize?
-2. Почему GitOps уменьшает drift?
-3. Что должен быть source of truth?
-4. Как хранить secrets в GitOps?
+1. Что из безопасности EKS — зона ответственности AWS, а что — ваша?
+2. Зачем нужны admission-контроллеры вроде Kyverno, если можно просто написать правильные манифесты вручную?
+3. Почему `NetworkPolicy` считается обязательным элементом, а не опциональным улучшением?
 
 ---
 
-# Модуль 16. CI/CD: GitHub Actions, ECR и deploy в EKS
+# Модуль 17. Disaster recovery и backup
 
-## 16.1 Pipeline
+## 17.1 Что нужно бэкапить в EKS
 
-```text
-Git push
-   |
-GitHub Actions
-   |
-+-- test
-+-- build image
-+-- scan
-+-- push -> ECR
-   |
-update image tag / digest
-   |
-Argo CD
-   |
-EKS
-```
+- Состояние Kubernetes-объектов (манифесты, конфигурация) — в первую очередь должно жить в git, это ваш основной "бэкап"
+- Персистентные данные (EBS-тома со StatefulSet) — снапшоты
+- Секреты и конфигурация вне git (если что-то создавалось руками, а не через GitOps)
+- Сам факт "как был устроен кластер" — Terraform/eksctl-конфиг тоже должен быть в git
 
-## 16.2 ECR login
+## 17.2 Velero — стандарт для бэкапа Kubernetes-объектов и томов
 
 ```bash
-aws ecr get-login-password --region "$AWS_REGION" \
-  | docker login \
-      --username AWS \
-      --password-stdin \
-      "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+velero install \
+  --provider aws \
+  --plugins velero/velero-plugin-for-aws:v1.10.0 \
+  --bucket velero-backups-demo-cluster \
+  --backup-location-config region=eu-central-1 \
+  --snapshot-location-config region=eu-central-1 \
+  --secret-file ./credentials-velero
 ```
-
-Repository:
 
 ```bash
-aws ecr create-repository \
-  --repository-name shop-api \
-  --region "$AWS_REGION"
+velero backup create payments-backup --include-namespaces payments
+velero schedule create daily-backup --schedule="0 3 * * *" --include-namespaces payments
 ```
 
-Build:
+Velero бэкапит и объекты Kubernetes (в S3 как JSON), и делает EBS-снапшоты персистентных томов — восстановление воспроизводит и манифесты, и данные.
+
+## 17.3 Восстановление
 
 ```bash
-docker build -t shop-api:git-$GITHUB_SHA .
-
-docker tag shop-api:git-$GITHUB_SHA \
-  "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/shop-api:git-$GITHUB_SHA"
-
-docker push \
-  "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/shop-api:git-$GITHUB_SHA"
+velero restore create --from-backup payments-backup
 ```
 
-## 16.3 GitHub Actions identity
+Регулярно тестируйте восстановление в отдельном (не продакшен) кластере — бэкап, который ни разу не восстанавливался, нельзя считать рабочим.
 
-Не используй long-lived AWS access keys, если можно применить OIDC federation / role assumption.
+## 17.4 Multi-region disaster recovery
 
-```text
-GitHub Actions
-     |
-OIDC token
-     |
-AWS IAM Role
-     |
-ECR / EKS permissions
-```
+Для критичных систем одного кластера в одном регионе может быть недостаточно. Паттерны:
 
-## 16.4 CD стратегии
+- **Pilot light** — минимальный резервный кластер в другом регионе, масштабируется при аварии основного
+- **Warm standby** — второй кластер работает постоянно с меньшей нагрузкой, готов принять весь трафик
+- **Active-active** — оба кластера в проде одновременно, трафик балансируется через Route 53 или Global Accelerator
 
-| Подход | Плюс | Минус |
-|---|---|---|
-| `kubectl apply` из CI | просто | CI должен иметь cluster access |
-| Helm from CI | удобно | всё ещё push-based |
-| GitOps | audit + reconciliation | нужен GitOps controller |
-| Progressive delivery | безопаснее rollout | сложнее |
+Выбор зависит от RTO/RPO требований бизнеса — чем ближе к active-active, тем дороже и сложнее, но тем меньше времени простоя при аварии.
+
+## 17.5 RTO и RPO применительно к EKS
+
+- **RPO (Recovery Point Objective)** — сколько данных допустимо потерять; определяется частотой снапшотов/бэкапов Velero и репликацией БД
+- **RTO (Recovery Time Objective)** — как быстро нужно восстановиться; определяется скоростью пересоздания кластера (Terraform/eksctl) + временем восстановления Velero + временем прогрева узлов
+
+Держите Terraform/eksctl конфигурацию кластера актуальной и протестированной — в критичной ситуации "поднять новый кластер с нуля за 20 минут по коду" намного надёжнее, чем разбираться, что настраивалось руками полгода назад.
+
+## 17.6 Резервирование control plane и multi-AZ по умолчанию
+
+Напомним из модуля 1: AWS уже размещает control plane в нескольких AZ автоматически — ваша ответственность именно за worker-узлы (растянуть по AZ) и за данные (снапшоты, реплики БД).
 
 ### Практика
 
-1. Собери Docker image.
-2. Push в ECR.
-3. Разверни через Helm.
-4. Переведи deployment в GitOps.
-5. Добавь rollback.
-6. Запрети CI использовать admin credentials.
+1. Установите Velero, настройте ежедневный бэкап по расписанию для одного namespace
+2. Удалите тестовый namespace целиком и восстановите его из бэкапа Velero
+3. Опишите (хотя бы на бумаге) RTO/RPO для вашего гипотетического продакшен-приложения и выберите подходящий DR-паттерн
 
-### Вопросы
+### Вопросы для самопроверки
 
-1. Почему ECR лучше Docker Hub для AWS workloads в некоторых архитектурах?
-2. Как GitHub Actions получает AWS credentials без static keys?
-3. Чем push CD отличается от pull GitOps?
-4. Где должна жить политика deploy permissions?
+1. Почему манифесты в git считаются "основным бэкапом" состояния кластера?
+2. Что бэкапит Velero — только объекты Kubernetes или ещё и данные в томах?
+3. В чём разница между pilot light, warm standby и active-active DR-паттернами?
 
 ---
 
-# Модуль 17. Lifecycle: add-ons, upgrades и node maintenance
+# Модуль 18. EKS в продакшене: чек-лист
 
-## 17.1 Версии Kubernetes
+## 18.1 Референсная архитектура продакшен-кластера
 
-На момент подготовки курса в EKS standard support доступны `1.36`, `1.35`, `1.34`; `1.33` и старше находятся в extended support по текущей таблице AWS. EKS позволяет более длительно оставаться на отдельных версиях за дополнительную стоимость, но рекомендуется планировать регулярные upgrades. https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html
-
-## 17.2 Upgrade control plane
-
-AWS рекомендует сначала тестировать приложение на новой версии; in-place upgrade после завершения может быть откатан к предыдущей minor version в течение 7 дней при выполнении соответствующих условий. https://docs.aws.amazon.com/eks/latest/userguide/update-cluster.html
-
-Для `eksctl`:
-
-```bash
-eksctl upgrade cluster \
-  --name "$CLUSTER_NAME" \
-  --version 1.36 \
-  --approve
+```
+                         Route 53
+                            │
+                     ALB (internet-facing)
+                            │
+        ┌───────────────────┴───────────────────┐
+        │              EKS Cluster                │
+        │  Control plane: Public+Private endpoint │
+        │  (публичный доступ ограничен по CIDR)   │
+        │                                          │
+        │  Managed Node Groups (on-demand, ≥3 AZ) │
+        │  + Karpenter NodePool (spot, batch)     │
+        │  + Fargate profile (namespace: batch)   │
+        │                                          │
+        │  Namespaces: prod-api, prod-workers,    │
+        │              monitoring, argocd          │
+        └──────────────────────────────────────────┘
+                            │
+         RDS (multi-AZ)  EBS/EFS   Secrets Manager
 ```
 
-Upgrades делай по одной minor version.
+## 18.2 Sizing control plane и node groups
 
-## 17.3 Upgrade flow
+Control plane масштабируется AWS автоматически — вам не нужно думать про его "размер". Для узлов: начинайте с нескольких умеренных инстансов (например, `m5.large`) в managed node group на on-demand для базовой нагрузки, добавьте Karpenter для эластичной части.
 
-```text
-1. Read release notes
-2. Test workloads
-3. Upgrade control plane
-4. Upgrade add-ons
-5. Upgrade nodes
-6. Validate workloads
-7. Monitor errors
+## 18.3 Kubernetes-манифесты как единый источник правды
+
+Весь продакшен-конфиг — в git, применяется только через GitOps (ArgoCD/Flux). Прямые `kubectl apply`/`kubectl edit` в прод-кластере — исключение, а не норма (и должны триггерить `selfHeal` откат, как обсуждали в модуле 11).
+
+## 18.4 Чек-лист продакшена
+
+```
+Сеть:
+[ ] Узлы в приватных подсетях, минимум 3 AZ
+[ ] VPC Endpoints для ECR/S3/Secrets Manager
+[ ] Security Groups for Pods для чувствительных сервисов
+[ ] NetworkPolicy deny-by-default
+
+Доступ:
+[ ] Access Entries вместо расшаренных IAM-пользователей
+[ ] Публичный control plane endpoint ограничен по CIDR (или Private-only + VPN)
+[ ] IMDSv2 обязателен
+
+Workload:
+[ ] requests/limits заданы у всех контейнеров
+[ ] readiness/liveness пробы у всех сервисов
+[ ] PodDisruptionBudget у критичных деплойментов
+[ ] topologySpreadConstraints между AZ
+
+Автоскейлинг:
+[ ] HPA настроен по релевантной метрике
+[ ] Karpenter/Cluster Autoscaler с разумными лимитами
+
+Хранилище и данные:
+[ ] EBS-тома шифрованы
+[ ] Регулярные снапшоты/Velero-бэкапы
+[ ] Восстановление из бэкапа протестировано хотя бы раз
+
+Безопасность:
+[ ] Pod Security Standards restricted/baseline
+[ ] Секреты через External Secrets Operator
+[ ] Сканирование образов включено
+[ ] GuardDuty for EKS включён
+
+Observability:
+[ ] Логи агрегируются (CloudWatch или Loki)
+[ ] Дашборды на ключевые метрики приложения и кластера
+[ ] Алерты настроены и доходят до дежурного
+
+Эксплуатация:
+[ ] Инфраструктура кластера в Terraform/eksctl-конфиге, в git
+[ ] Деплой через GitOps
+[ ] Документирован процесс апгрейда control plane/узлов/аддонов
+[ ] RTO/RPO определены, DR-план описан
 ```
 
-## 17.4 Add-ons
+## 18.5 Антипаттерны
 
-```bash
-aws eks list-addons \
-  --cluster-name "$CLUSTER_NAME" \
-  --region "$AWS_REGION"
-```
-
-Версия VPC CNI:
-
-```bash
-aws eks describe-addon \
-  --cluster-name "$CLUSTER_NAME" \
-  --addon-name vpc-cni \
-  --region "$AWS_REGION"
-```
-
-AWS Add-ons уменьшают операционную нагрузку и проходят validation/security patches. https://docs.aws.amazon.com/eks/latest/userguide/eks-add-ons.html
-
-## 17.5 Node upgrades
-
-Для Managed Node Groups AWS автоматизирует lifecycle и drain nodes в рамках обновлений. https://docs.aws.amazon.com/eks/latest/userguide/managed-node-groups.html
-
-## 17.6 Upgrade checklist
-
-Перед upgrade:
-
-```bash
-kubectl get nodes
-kubectl get pods -A
-kubectl get pdb -A
-kubectl get crd
-kubectl get ingress -A
-kubectl get events -A --sort-by=.lastTimestamp
-```
-
-Сохрани:
-
-- текущее version состояние;
-- add-ons versions;
-- deprecated APIs;
-- backup critical data;
-- rollback plan.
+- Один большой namespace `default` для всего прод-приложения — нет изоляции, сложно считать стоимость
+- Широкая IAM-роль на всю node group "чтобы не разбираться с IRSA" — прямой путь к инциденту безопасности
+- Отсутствие `PodDisruptionBudget` — любой апгрейд узла может положить сервис целиком
+- Ручные изменения в прод-кластере в обход git — теряется единый источник правды, сложно понять, "что реально задеплоено"
+- Игнорирование deprecated API warnings годами — апгрейд превращается в квест в последний момент
 
 ### Практика
 
-1. Проверь текущую Kubernetes version.
-2. Проверь add-ons.
-3. Составь upgrade checklist.
-4. Сделай upgrade на lab cluster.
-5. Сравни `kubectl get nodes` до и после.
-
-### Вопросы
-
-1. Почему нельзя обновлять control plane и забывать про add-ons?
-2. Зачем читать release notes?
-3. Почему minor upgrades делают по одной версии?
-4. Что проверять после upgrade?
+Пройдитесь по чек-листу 18.4 применительно к своему (или тестовому) кластеру, отметьте невыполненные пункты и составьте план их закрытия с приоритетами.
 
 ---
 
-# Модуль 18. Troubleshooting и production diagnostics
+# Модуль 19. Итоговый проект: развёртывание микросервисного приложения
 
-## 18.1 Universal debugging loop
+## 19.1 Что строим
 
-```text
-1. What changed?
-2. What is broken?
-3. At which layer?
-4. What do Events say?
-5. What do logs say?
-6. What does AWS say?
-7. Can I reproduce?
-8. What is the smallest safe rollback?
-```
+Простое, но реалистичное приложение из трёх сервисов:
+- `api-gateway` — принимает HTTP-запросы, за Ingress/ALB
+- `orders-service` — обрабатывает заказы, пишет в RDS Postgres
+- `notifications-worker` — читает из SQS, шлёт уведомления, работает на spot-узлах/Fargate
 
-## 18.2 CrashLoopBackOff
+## 19.2 Требования
 
-```bash
-kubectl get pod
-kubectl describe pod <pod>
-kubectl logs <pod>
-kubectl logs <pod> --previous
-```
+- Все три сервиса в отдельных Deployment с requests/limits и пробами
+- `api-gateway` доступен снаружи через ALB Ingress с TLS
+- `orders-service` подключается к RDS через пароль из Secrets Manager (External Secrets Operator), доступ к RDS ограничен через Security Groups for Pods
+- `notifications-worker` имеет права на чтение SQS только через IRSA/Pod Identity, задеплоен в Fargate profile
+- HPA настроен на `orders-service` по CPU
+- Все три сервиса имеют `PodDisruptionBudget`
+- Деплой происходит через ArgoCD из git-репозитория
+- Базовые дашборды и алерты в Prometheus/Grafana или CloudWatch
 
-Проверяй:
+## 19.3 Этапы
 
-- command/args;
-- env;
-- Secret;
-- ConfigMap;
-- liveness probe;
-- OOMKilled;
-- application startup.
+1. Поднимите кластер с managed node group + Fargate profile для namespace `notifications`
+2. Настройте VPC Endpoints, security groups, RDS Postgres в приватной подсети
+3. Настройте IRSA/Pod Identity: роль для `orders-service` (Secrets Manager read), роль для `notifications-worker` (SQS read)
+4. Установите AWS Load Balancer Controller, External Secrets Operator, ArgoCD, kube-prometheus-stack
+5. Опишите манифесты всех трёх сервисов в git-репозитории, подключите через ArgoCD Application
+6. Настройте HPA на `orders-service`, `PodDisruptionBudget` на все три сервиса
+7. Проведите нагрузочный тест на `api-gateway`, понаблюдайте за автоскейлингом через HPA и Karpenter/Cluster Autoscaler
+8. Настройте алерт на рост latency/error rate, специально сломайте `orders-service`, убедитесь, что алерт срабатывает
 
-## 18.3 ImagePullBackOff
-
-Проверки:
+## 19.4 Как проверить, что получилось
 
 ```bash
-kubectl describe pod <pod>
+# нагрузка
+hey -z 5m -c 50 https://api.example.com/orders
+
+# во время нагрузки
+kubectl get hpa -w
+kubectl get pods -n orders -w
+
+# проверка идемпотентности secrets sync
+kubectl exec -n orders deploy/orders-service -- env | grep DB_PASSWORD
+
+# проверка отказоустойчивости
+kubectl delete pod -n orders -l app=orders-service --force
+# приложение не должно уйти в полный даунтайм благодаря нескольким репликам и PDB
 ```
 
-Причины:
+## 19.5 Что можно улучшить дальше
 
-```text
-wrong image
-wrong tag
-private ECR access
-IAM
-network
-registry outage
-```
-
-## 18.4 Pending
-
-```bash
-kubectl describe pod <pod>
-kubectl get nodes
-kubectl describe node <node>
-```
-
-Типичные причины:
-
-- недостаток CPU/memory;
-- taint;
-- affinity;
-- topology constraints;
-- volume constraints;
-- нет matching node;
-- Karpenter/Auto Mode не может provision подходящий capacity.
-
-## 18.5 Service не работает
-
-```bash
-kubectl get svc
-kubectl get endpointslice -l kubernetes.io/service-name=api
-kubectl get pods -l app=api
-```
-
-Проверь selector:
-
-```bash
-kubectl get svc api -o yaml
-kubectl get pods --show-labels
-```
-
-## 18.6 DNS
-
-```bash
-kubectl get pods -n kube-system | grep coredns
-kubectl logs -n kube-system -l k8s-app=kube-dns
-```
-
-Тест:
-
-```bash
-kubectl run dns-test --rm -it --restart=Never \
-  --image=busybox:1.36 \
-  -- nslookup kubernetes.default
-```
-
-## 18.7 IAM
-
-Для Pod:
-
-```bash
-kubectl get sa -n shop
-```
-
-Для Pod Identity:
-
-```bash
-aws eks list-pod-identity-associations \
-  --cluster-name "$CLUSTER_NAME" \
-  --region "$AWS_REGION"
-```
-
-## 18.8 AWS Load Balancer
-
-Сначала Kubernetes:
-
-```bash
-kubectl describe ingress <ingress>
-kubectl describe svc <service>
-```
-
-Потом AWS:
-
-- Load Balancer;
-- Target Groups;
-- Target health;
-- Security Groups;
-- subnet placement;
-- controller logs.
-
-### Практика: «сломай и почини»
-
-Сделай 10 аварий:
-
-```text
-1. Wrong image tag
-2. Wrong Service selector
-3. Broken readiness probe
-4. Too large resource request
-5. Missing Secret
-6. Wrong ConfigMap key
-7. NetworkPolicy deny
-8. Broken ingress annotation
-9. IAM permission denied
-10. Node taint without toleration
-```
-
-Для каждой запиши:
-
-```text
-Symptom
-Layer
-Command
-Evidence
-Root cause
-Fix
-Prevention
-```
-
-### Вопросы
-
-1. Почему `kubectl get pods` недостаточно для диагностики?
-2. Что читать первым: logs или events?
-3. Как отличить Kubernetes проблему от AWS проблемы?
-4. Что должно быть в incident timeline?
+- Добавить canary-деплой через Argo Rollouts
+- Настроить multi-region DR через Velero + второй кластер
+- Внедрить service mesh (App Mesh/Istio) для mTLS между сервисами
+- Настроить Kyverno-политики для admission control
+- Подключить Kubecost для разбивки стоимости по сервису
 
 ---
 
-# Модуль 19. Production architecture и итоговый проект
-
-## 19.1 Финальный проект
-
-Построй production-like платформу интернет-магазина:
-
-```text
-                          Internet
-                              |
-                         Route 53 / DNS
-                              |
-                        ACM / TLS
-                              |
-                         ALB / WAF
-                              |
-                         Ingress
-                              |
-               +--------------+--------------+
-               |                             |
-          frontend                         api
-               |                             |
-               |                         worker
-               |                             |
-               +-------------+---------------+
-                             |
-                       Kubernetes Services
-                             |
-          +------------------+------------------+
-          |                  |                  |
-         RDS             ElastiCache           S3
-          |
-       database
-
-EKS:
-  Control Plane -> AWS managed
-  Compute -> Auto Mode or MNG + Karpenter
-  IAM -> Access Entries + Pod Identity
-  Storage -> EBS/EFS
-  Security -> RBAC + NetworkPolicy + SG + KMS
-  Observability -> CloudWatch / Prometheus / OTEL
-  Delivery -> GitHub Actions + ECR + GitOps
-```
-
-## 19.2 Компоненты
-
-### Namespace'ы
-
-```text
-shop
-observability
-platform
-```
-
-### Workloads
-
-```text
-frontend Deployment: 3 replicas
-api Deployment: 3 replicas
-worker Deployment: 2 replicas
-```
-
-### Autoscaling
-
-```text
-frontend HPA
-api HPA
-worker HPA по подходящей custom metric/queue depth
-```
-
-### HA
-
-- multi-AZ;
-- topology spread;
-- PDB;
-- readiness/liveness/startup probes;
-- graceful shutdown.
-
-### Security
-
-- Access Entries;
-- Pod Identity;
-- non-root containers;
-- NetworkPolicy;
-- least privilege IAM;
-- KMS encryption;
-- externalized secrets.
-
-### Ingress
-
-- ALB;
-- HTTPS;
-- health checks;
-- host/path routing.
-
-### Data
-
-- RDS PostgreSQL;
-- S3 для object storage;
-- EBS для stateful component, если он действительно нужен;
-- EFS только там, где нужен shared filesystem.
-
-### Delivery
-
-```text
-PR -> test -> build -> scan -> ECR -> GitOps -> EKS
-```
-
-## 19.3 Production checklist
-
-### Infrastructure
-
-- [ ] Terraform state защищён и имеет locking strategy
-- [ ] VPC multi-AZ
-- [ ] private subnets для worker capacity, где это соответствует архитектуре
-- [ ] cluster endpoint access ограничен согласно модели доступа
-- [ ] IAM roles вместо long-lived keys
-
-### Kubernetes
-
-- [ ] resource requests/limits
-- [ ] readiness/liveness/startup probes
-- [ ] PDB
-- [ ] topology spread
-- [ ] NetworkPolicy
-- [ ] Pod security context
-- [ ] immutable image references
-
-### AWS integration
-
-- [ ] Pod Identity
-- [ ] ECR
-- [ ] Load Balancer Controller или Auto Mode capabilities
-- [ ] EBS/EFS CSI как требуется
-- [ ] KMS
-- [ ] CloudWatch/metrics/traces
-
-### Operations
-
-- [ ] backups
-- [ ] upgrade runbook
-- [ ] rollback runbook
-- [ ] incident runbook
-- [ ] cost review
-- [ ] capacity review
-- [ ] access review
-
-## 19.4 Минимальные SLO
-
-Для лаборатории выбери:
-
-```text
-Availability: 99.9%
-API P95 latency: < 300ms
-5xx rate: < 0.1%
-Recovery objective: documented
-```
-
-Это не «правильные» универсальные значения — цель практики научиться выбирать SLO осознанно под workload.
-
-## 19.5 Финальный экзамен
-
-Ты готов, когда можешь без подсказки ответить:
-
-```text
-1. Что AWS управляет в EKS?
-2. Как Pod получает AWS credentials?
-3. Как Service находит Pod?
-4. Как Ingress превращается в ALB?
-5. Почему Pod Pending?
-6. Чем HPA отличается от node autoscaling?
-7. Что делает Karpenter?
-8. Как ограничить Pod-to-Pod traffic?
-9. Как сохранить данные после Pod restart?
-10. Как обновить EKS без незапланированного downtime?
-11. Как диагностировать CrashLoopBackOff?
-12. Почему приложение может быть healthy, а пользователю всё равно плохо?
-```
-
----
-
-# Шпаргалка AWS CLI + EKS
+# Шпаргалка eksctl / kubectl / IAM
 
 ```bash
-# identity
-aws sts get-caller-identity
+# кластеры
+eksctl create cluster -f cluster.yaml
+eksctl get cluster
+eksctl delete cluster --name demo-cluster
+eksctl upgrade cluster --name demo-cluster --version 1.31 --approve
 
-# clusters
-aws eks list-clusters --region "$AWS_REGION"
-aws eks describe-cluster --name "$CLUSTER_NAME" --region "$AWS_REGION"
+# node groups
+eksctl create nodegroup --cluster demo-cluster --name workers --nodes 3
+eksctl get nodegroup --cluster demo-cluster
+eksctl scale nodegroup --cluster demo-cluster --name workers --nodes 5
+eksctl delete nodegroup --cluster demo-cluster --name workers
 
 # kubeconfig
-aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$AWS_REGION"
+aws eks update-kubeconfig --region eu-central-1 --name demo-cluster
 
-# add-ons
-aws eks list-addons --cluster-name "$CLUSTER_NAME" --region "$AWS_REGION"
-aws eks describe-addon-versions --addon-name vpc-cni --kubernetes-version 1.36
+# доступ
+aws eks create-access-entry --cluster-name demo-cluster --principal-arn <arn> --type STANDARD
+aws eks associate-access-policy --cluster-name demo-cluster --principal-arn <arn> \
+  --access-scope type=cluster --policy-arn arn:aws:eks::aws:cluster-access-policy/AmazonEKSAdminPolicy
+aws eks list-access-entries --cluster-name demo-cluster
 
-# nodes
-aws eks list-nodegroups --cluster-name "$CLUSTER_NAME" --region "$AWS_REGION"
-aws eks describe-nodegroup --cluster-name "$CLUSTER_NAME" --nodegroup-name general --region "$AWS_REGION"
+# IRSA / Pod Identity
+eksctl create iamserviceaccount --cluster demo-cluster --namespace ns --name sa \
+  --attach-policy-arn <policy-arn> --approve
+aws eks create-pod-identity-association --cluster-name demo-cluster \
+  --namespace ns --service-account sa --role-arn <role-arn>
 
-# access entries
-aws eks list-access-entries --cluster-name "$CLUSTER_NAME" --region "$AWS_REGION"
-aws eks describe-access-entry --cluster-name "$CLUSTER_NAME" --principal-arn arn:aws:iam::${AWS_ACCOUNT_ID}:role/DeveloperRole --region "$AWS_REGION"
+# addons
+aws eks list-addons --cluster-name demo-cluster
+aws eks update-addon --cluster-name demo-cluster --addon-name vpc-cni --addon-version <v>
 
-# pod identity
-aws eks list-pod-identity-associations --cluster-name "$CLUSTER_NAME" --region "$AWS_REGION"
-
-# ECR
-aws ecr describe-repositories --region "$AWS_REGION"
-aws ecr get-login-password --region "$AWS_REGION"
-
-# KMS / encryption
-aws eks describe-cluster --name "$CLUSTER_NAME" --region "$AWS_REGION" --query 'cluster.encryptionConfig'
-```
-
----
-
-# Шпаргалка kubectl
-
-```bash
-# context
-kubectl config get-contexts
-kubectl config current-context
-kubectl config use-context <context>
-
-# cluster
+# базовые kubectl
 kubectl get nodes -o wide
-kubectl get nodes --show-labels
-kubectl cluster-info
-
-# namespaces
-kubectl get ns
-kubectl create ns shop
-
-# workloads
 kubectl get pods -A
-kubectl get deploy -A
-kubectl get ds -A
-kubectl get sts -A
-kubectl get jobs -A
-kubectl get cronjobs -A
-
-# service/network
-kubectl get svc -A
-kubectl get ingress -A
-kubectl get endpointslice -A
-
-# logs
-kubectl logs <pod>
-kubectl logs <pod> --previous
-kubectl logs -f <pod>
-
-# inspect
-kubectl describe pod <pod>
-kubectl describe node <node>
-kubectl get pod <pod> -o yaml
-
-# rollout
-kubectl rollout status deployment/<name>
-kubectl rollout history deployment/<name>
-kubectl rollout undo deployment/<name>
-
-# scaling
-kubectl scale deployment/<name> --replicas=3
-kubectl get hpa
-
-# resources
+kubectl describe pod <pod> -n <ns>
+kubectl logs -f <pod> -n <ns>
+kubectl exec -it <pod> -n <ns> -- sh
 kubectl top nodes
-kubectl top pods -A
-
-# events
-kubectl get events -A --sort-by=.lastTimestamp
-
-# storage
-kubectl get pvc -A
-kubectl get pv
-kubectl get storageclass
-
-# RBAC
-kubectl auth can-i get pods
-kubectl auth can-i create deployments -n shop
-
-# network policy
-kubectl get networkpolicy -A
-
-# delete one resource
-kubectl delete pod <pod>
+kubectl top pods -n <ns>
+kubectl rollout restart deployment <name> -n <ns>
+kubectl rollout status deployment <name> -n <ns>
+kubectl drain <node> --ignore-daemonsets --delete-emptydir-data
+kubectl cordon <node>
+kubectl uncordon <node>
 ```
 
 ---
 
-# Шпаргалка Helm
+# Вопросы на собеседовании по EKS с ответами
 
-```bash
-helm list -A
-helm repo list
-helm repo update
-helm search repo <name>
-helm show values <chart>
-helm install <release> <chart> -n <namespace> --create-namespace
-helm upgrade <release> <chart> -n <namespace>
-helm upgrade --install <release> <chart> -n <namespace>
-helm history <release> -n <namespace>
-helm rollback <release> <revision> -n <namespace>
-helm uninstall <release> -n <namespace>
-```
+**Что берёт на себя AWS в EKS, а что остаётся на пользователе?**
+AWS управляет control plane (API server, etcd, scheduler, controller-manager) — их доступностью, патчами, масштабированием, шифрованием etcd. Пользователь отвечает за worker-узлы (если не Fargate), сетевую конфигурацию, IAM-права подов, сами приложения и их конфигурацию.
 
----
+**Чем IRSA отличается от Pod Identity?**
+Оба дают подам доступ к AWS через IAM-роль без статических ключей. IRSA работает через OIDC provider кластера и требует прописывать trust policy под конкретный кластер в каждой роли. Pod Identity — более новый механизм, роль доверяет общему сервису `pods.eks.amazonaws.com`, не привязана к OIDC конкретного кластера, что упрощает настройку и перенос между кластерами.
 
-# Шпаргалка диагностики
+**Почему под может не запускаться, хотя на узле есть свободные CPU и память?**
+Часто причина — нехватка IP-адресов на узле. VPC CNI выдаёт подам реальные IP из VPC, и число IP, которое может держать узел, ограничено типом инстанса (количеством ENI и IP на ENI). Решение — Prefix Delegation или инстанс большего размера/типа.
 
-| Симптом | Первые команды |
-|---|---|
-| `Pending` | `kubectl describe pod`, `kubectl get nodes` |
-| `CrashLoopBackOff` | `kubectl logs`, `kubectl logs --previous`, `kubectl describe pod` |
-| `ImagePullBackOff` | `kubectl describe pod`, ECR/IAM checks |
-| Service не отвечает | `kubectl get svc`, `get endpointslice`, labels |
-| Ingress не работает | `kubectl describe ingress`, controller logs, AWS LB |
-| DNS не работает | CoreDNS pods/logs + `nslookup` |
-| Pod не получает AWS access | ServiceAccount + Pod Identity + IAM role |
-| Нет Pod IP | VPC CNI + subnet/IP capacity |
-| Node NotReady | `kubectl describe node`, kubelet/system events |
-| LB unhealthy | target health + app readiness + SG |
-| HPA не масштабирует | metrics availability + requests + HPA status |
+**В чём разница между Cluster Autoscaler и Karpenter?**
+Cluster Autoscaler работает через Auto Scaling Groups заранее заданных node groups и реагирует на unschedulable поды, увеличивая/уменьшая desired capacity нужной ASG. Karpenter обходится без ASG, напрямую запускает EC2-инстансы оптимального размера под конкретные поды и умеет активно консолидировать недогруженные узлы для экономии.
+
+**Зачем нужен `PodDisruptionBudget` в контексте EKS?**
+При апгрейде node group (или scale-down от Cluster Autoscaler/Karpenter) узлы получают `cordon`+`drain`. Без PDB это может одновременно снять с работы слишком много реплик одного сервиса. PDB гарантирует минимальное число доступных подов во время добровольных disruption-событий.
+
+**Как устроена сеть подов в EKS по умолчанию?**
+Через AWS VPC CNI: каждый под получает реальный IP-адрес из VPC-подсети (не оверлейную сеть). Это даёт прямую совместимость с VPC security groups и route tables, но ограничивает плотность подов на узле числом доступных IP.
+
+**Как обеспечить доступ пода к RDS без статических паролей "на глазок"?**
+Пароль хранится в AWS Secrets Manager, синхронизируется в Kubernetes `Secret` через External Secrets Operator, у которого свой `ServiceAccount` с IRSA/Pod Identity ролью, дающей доступ только на чтение конкретного секрета. Доступ пода к самой RDS ограничивается security group (в идеале — Security Group for Pods, а не общая для узла).
+
+**Чем ALB через AWS Load Balancer Controller отличается от Service типа LoadBalancer по умолчанию?**
+Стандартный `Service type=LoadBalancer` в EKS через in-tree провайдер создаёт устаревший Classic Load Balancer. AWS Load Balancer Controller умеет создавать современные ALB (L7, path/host-based роутинг, TLS через ACM) через `Ingress` и NLB (L4) через аннотации на `Service`.
+
+**Что произойдёт, если пропустить обновление аддона VPC CNI при апгрейде control plane?**
+Может возникнуть несовместимость версий — новый control plane может ожидать возможности, которых старая версия аддона не поддерживает, что приведёт к сетевым сбоям у подов. AWS явно рекомендует держать версии аддонов совместимыми с версией control plane.
+
+**Как в EKS реализовать multi-tenancy на уровне одного кластера?**
+Через комбинацию: `Namespace` для логической изоляции, `ResourceQuota`/`LimitRange` для ограничения ресурсов, `NetworkPolicy` для сетевой изоляции между тенантами, разные IAM-роли через IRSA/Pod Identity для разных namespace, и Pod Security Standards. Для сильной изоляции (регуляторные требования, недоверенные тенанты) чаще заводят отдельные кластеры, а не полагаются только на namespace-изоляцию.
 
 ---
 
-# Вопросы на собеседовании по EKS
+# FAQ: частые вопросы про EKS
 
-## Junior
+**Можно ли использовать EKS бесплатно?**
+Control plane тарифицируется почасово с первой минуты — бесплатного тарифа на него нет (в отличие от некоторых managed сервисов с free tier). Реально "бесплатно" можно поэкспериментировать только в рамках краткосрочного AWS free trial кредита, аккуратно удаляя ресурсы после экспериментов.
 
-### 1. Что такое EKS?
-Managed Kubernetes service AWS.
+**Нужно ли знать голый Kubernetes, чтобы работать с EKS?**
+Да, обязательно. EKS не абстрагирует Kubernetes API — вы работаете с теми же `kubectl`, Deployment, Service, что и в любом другом дистрибутиве. EKS облегчает именно эксплуатацию control plane и интеграцию с AWS-сервисами, а не сам Kubernetes.
 
-### 2. Что такое Pod?
-Минимальная единица deployment в Kubernetes.
+**В чём разница между `eksctl` и Terraform для создания кластера?**
+`eksctl` — специализированный CLI, обёртка над CloudFormation, быстрый старт, меньше boilerplate. Terraform — универсальный IaC-инструмент, лучше подходит, когда EKS — часть большой инфраструктуры (VPC, RDS, IAM уже управляются Terraform), даёт больше контроля и переиспользуемости через модули.
 
-### 3. Зачем Service?
-Даёт стабильный network endpoint поверх меняющихся Pod IP.
+**Можно ли мигрировать с self-managed Kubernetes на EKS без даунтайма?**
+В общем случае нет прямой "миграции control plane" — вы создаёте новый EKS-кластер и постепенно переносите нагрузку (через blue/green: DNS-переключение между старым и новым кластером после проверки). Полностью бесшовно (без хотя бы краткого окна) мигрировать между control plane разных дистрибутивов невозможно.
 
-### 4. Что такое Deployment?
-Controller для декларативного управления stateless Pod replicas и rollout.
+**Что произойдёт с приложениями, если control plane временно недоступен?**
+Уже запущенные поды продолжат работать — kubelet на узлах не зависит от постоянной доступности API server для поддержания уже запущенных контейнеров. Но новые деплои, скейлинг, восстановление упавших подов остановятся до восстановления API. AWS держит SLA на доступность control plane именно поэтому.
 
-### 5. Что делает `kubectl`?
-Работает с Kubernetes API.
+**Нужен ли отдельный кластер для каждого микросервиса?**
+Нет, это избыточно. Обычно один кластер на окружение (dev/staging/prod), внутри — множество namespace на команды/сервисы. Отдельные кластеры заводят по причинам изоляции (compliance, blast radius), а не "один сервис — один кластер".
 
----
+**Чем EKS Fargate отличается от AWS Fargate для ECS?**
+Технология похожая (бессерверные контейнеры без управления EC2), но EKS Fargate работает через стандартный Kubernetes API (Fargate profile определяет, какие поды туда попадают), а Fargate для ECS — через проприетарный ECS API. Это разные продукты с общим "движком" бессерверных контейнеров под капотом.
 
-## Middle
-
-### 6. В чём разница IAM и RBAC?
-IAM отвечает за AWS identity/authorization, RBAC — за Kubernetes API permissions.
-
-### 7. Что такое EKS Pod Identity?
-Механизм выдачи IAM permissions workload'ам через связь ServiceAccount и IAM role.
-
-### 8. Зачем VPC CNI?
-Чтобы Pod networking интегрировался с AWS VPC.
-
-### 9. Почему Pod Pending?
-Недостаток ресурсов, constraints, taints, affinity, storage или отсутствие подходящего node capacity.
-
-### 10. Чем HPA отличается от Karpenter?
-HPA меняет количество Pod replicas, Karpenter может изменять node capacity.
-
-### 11. ALB vs NLB?
-ALB — L7 HTTP-aware load balancing; NLB — L4 network load balancing.
-
-### 12. EBS vs EFS?
-EBS — block storage, EFS — shared elastic file storage.
-
----
-
-## Senior
-
-### 13. Как спроектировать EKS multi-AZ?
-Разместить capacity и replicas по AZ, использовать topology spread/PDB, проверить dependency topology и managed services.
-
-### 14. Как закрыть Kubernetes API?
-Использовать private endpoint или ограничить public CIDRs в соответствии с архитектурой доступа.
-
-### 15. Как дать Pod доступ только к одному S3 prefix?
-Отдельная IAM role через Pod Identity с минимальной policy и конкретным ARN/prefix.
-
-### 16. Как расследовать high latency?
-Разделить request path на ingress/LB, app, downstreams, DB, network и metrics/traces; проверить P95/P99, saturation и errors.
-
-### 17. Что делает Karpenter?
-Provisioning/disprovisioning nodes под unschedulable Pod requirements.
-
-### 18. Как подготовить upgrade EKS?
-Изучить release notes, проверить deprecated APIs/add-ons/CRDs, протестировать, обновить control plane, add-ons и nodes с наблюдаемостью и rollback plan.
-
-### 19. Почему `requests` критичны?
-Они влияют на scheduling и QoS, а также на корректную работу HPA/autoscaling и capacity planning.
-
-### 20. Чем Auto Mode меняет операционную модель?
-AWS берёт на себя больше cluster infrastructure lifecycle, уменьшая объём ручного управления compute/networking/storage/load balancing.
-
----
-
-# FAQ
-
-## Нужно ли сначала идеально знать Kubernetes?
-Нет. Но базовые Pod, Deployment, Service, DNS, storage, scheduling и RBAC должны быть понятны.
-
-## Можно ли учить EKS только через AWS Console?
-Можно начать так, но для DevOps/Platform работы обязательно нужны CLI, YAML, `kubectl` и Infrastructure as Code.
-
-## Нужен ли Terraform?
-Для production platform — очень часто да. Для знакомства можно начать с `eksctl`.
-
-## Обязательно ли использовать Karpenter?
-Нет. Это один из вариантов autoscaling capacity.
-
-## Нужно ли запускать БД внутри EKS?
-Не обязательно. Сравни операционные последствия с managed database service.
-
-## Надо ли использовать EKS Auto Mode?
-Изучи Auto Mode и Standard EKS, затем выбирай модель по требованиям к управляемости, совместимости, контролю и operational model.
-
-## Что важнее: Security или Cost?
-Они обе важны, но trade-off определяется риском и business requirements. Цель production-платформы — не «минимальная стоимость», а предсказуемая стоимость при нужном уровне надёжности и безопасности.
+**Как понять, что кластер стал слишком большим и пора его разделить?**
+Явных жёстких лимитов немного, но сигналы: заметно возросшая задержка API server, сложности с апгрейдом (слишком много различных приложений с разными требованиями к деprecated API), команды начинают конфликтовать за ресурсы/имена, требования к изоляции стали жёстче, чем даёт namespace-разделение.
 
 ---
 
 # Глоссарий EKS
 
-| Термин | Значение |
-|---|---|
-| EKS | Amazon Elastic Kubernetes Service |
-| Control Plane | Kubernetes management components |
-| Node | вычислительный узел |
-| Pod | минимальная workload единица |
-| Deployment | controller для stateless workloads |
-| Service | стабильный network endpoint |
-| Ingress | HTTP routing API |
-| ALB | Application Load Balancer |
-| NLB | Network Load Balancer |
-| CNI | Container Network Interface |
-| VPC CNI | AWS networking plugin for Pods |
-| MNG | Managed Node Group |
-| Auto Mode | EKS infrastructure automation model |
-| HPA | Horizontal Pod Autoscaler |
-| Karpenter | node provisioning/autoscaling project |
-| PDB | PodDisruptionBudget |
-| RBAC | Kubernetes Role Based Access Control |
-| Access Entry | IAM principal ↔ EKS cluster access mapping |
-| Pod Identity | IAM permissions for Kubernetes workloads |
-| IRSA | IAM Roles for Service Accounts |
-| CSI | Container Storage Interface |
-| PVC | PersistentVolumeClaim |
-| EBS | Elastic Block Store |
-| EFS | Elastic File System |
-| ECR | Elastic Container Registry |
-| KMS | Key Management Service |
-| CRD | Custom Resource Definition |
-| GitOps | управление desired state через Git |
-| SLO | Service Level Objective |
-| SLI | Service Level Indicator |
+- **Control plane** — управляемая AWS часть Kubernetes-кластера: API server, etcd, scheduler, controller-manager
+- **Data plane** — worker-узлы (EC2) или Fargate-поды, где реально исполняются контейнеры
+- **Managed Node Group** — группа worker-узлов, управляемая AWS через Auto Scaling Group с упрощённым апгрейдом/масштабированием
+- **Fargate profile** — конфигурация, определяющая, какие поды (по namespace/label) запускаются бессерверно на AWS Fargate
+- **VPC CNI** — сетевой плагин Kubernetes от AWS, выдающий подам реальные IP-адреса из VPC
+- **IRSA (IAM Roles for Service Accounts)** — механизм выдачи подам AWS IAM-прав через OIDC federation, привязанный к Kubernetes ServiceAccount
+- **EKS Pod Identity** — более новый механизм выдачи подам IAM-прав, не требующий привязки к OIDC provider конкретного кластера
+- **EKS Add-on** — компонент кластера (vpc-cni, coredns, kube-proxy, ebs-csi и т.д.), версией и установкой которого управляет EKS API
+- **Karpenter** — контроллер автоскейлинга узлов, напрямую запускающий EC2-инстансы оптимального размера под unschedulable поды
+- **Cluster Autoscaler** — классический контроллер автоскейлинга узлов, работающий через Auto Scaling Groups
+- **AWS Load Balancer Controller** — контроллер, создающий ALB/NLB на основе Kubernetes Ingress/Service
+- **Security Groups for Pods** — механизм назначения security group конкретным подам, а не всему узлу
+- **Access Entries** — современный способ управления доступом IAM-принципалов к Kubernetes API кластера (замена `aws-auth` ConfigMap)
+- **Bottlerocket** — специализированная минималистичная ОС AWS для запуска контейнеров на worker-узлах
+- **Prefix Delegation** — режим VPC CNI, резервирующий целые IP-префиксы вместо отдельных адресов, увеличивая плотность подов на узле
+- **PodDisruptionBudget (PDB)** — объект Kubernetes, ограничивающий, сколько реплик может быть недоступно одновременно при добровольных disruption-событиях (апгрейд, drain)
+- **GitOps** — модель деплоя, при которой git-репозиторий — единственный источник истины, а контроллер в кластере (ArgoCD/Flux) сам подтягивает изменения
+- **Velero** — инструмент бэкапа/восстановления объектов Kubernetes и связанных персистентных томов
+- **External Secrets Operator** — контроллер, синхронизирующий секреты из внешних хранилищ (Secrets Manager, SSM Parameter Store) в Kubernetes `Secret`
 
 ---
 
-# Официальные источники
+# Официальные источники и что читать дальше
 
-## AWS EKS
+- Документация Amazon EKS — https://docs.aws.amazon.com/eks/
+- eksctl — https://eksctl.io/
+- AWS Load Balancer Controller — https://kubernetes-sigs.github.io/aws-load-balancer-controller/
+- Karpenter — https://karpenter.sh/
+- Amazon EKS Best Practices Guides — https://docs.aws.amazon.com/eks/latest/best-practices/introduction.html
+- terraform-aws-modules/eks — https://github.com/terraform-aws-modules/terraform-aws-eks
+- External Secrets Operator — https://external-secrets.io/
+- Velero — https://velero.io/
+- ArgoCD — https://argo-cd.readthedocs.io/
 
-- [Amazon EKS Documentation](https://docs.aws.amazon.com/eks/)
-- [What is Amazon EKS?](https://docs.aws.amazon.com/eks/latest/userguide/what-is-eks.html)
-- [Getting started with EKS](https://docs.aws.amazon.com/eks/latest/userguide/getting-started.html)
-- [Learn EKS by example](https://docs.aws.amazon.com/eks/latest/userguide/learn-eks.html)
-- [Kubernetes concepts for EKS](https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-concepts.html)
+## Как помочь проекту
 
-## EKS versions and lifecycle
-
-- [Kubernetes version lifecycle on EKS](https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html)
-- [Kubernetes versions standard support](https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions-standard.html)
-- [Cluster lifecycle and configuration](https://docs.aws.amazon.com/eks/latest/userguide/clusters.html)
-- [Cluster upgrades](https://docs.aws.amazon.com/eks/latest/userguide/update-cluster.html)
-
-## EKS Auto Mode
-
-- [Automate cluster infrastructure with EKS Auto Mode](https://docs.aws.amazon.com/eks/latest/userguide/automode.html)
-- [EKS Auto Mode with eksctl](https://docs.aws.amazon.com/eks/latest/eksctl/auto-mode.html)
-- [Auto Mode quickstart](https://docs.aws.amazon.com/eks/latest/userguide/getting-started-automode.html)
-
-## Networking
-
-- [Amazon VPC CNI](https://docs.aws.amazon.com/eks/latest/best-practices/vpc-cni.html)
-- [Cluster API endpoint](https://docs.aws.amazon.com/eks/latest/userguide/cluster-endpoint.html)
-- [Network security best practices](https://aws.github.io/aws-eks-best-practices/security/docs/network/)
-- [Security Groups for Pods](https://docs.aws.amazon.com/eks/latest/best-practices/sgpp.html)
-
-## IAM and security
-
-- [EKS Access Entries](https://docs.aws.amazon.com/eks/latest/userguide/access-entries.html)
-- [EKS access policies](https://docs.aws.amazon.com/eks/latest/userguide/access-policies.html)
-- [EKS Pod Identity](https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html)
-- [IRSA / IAM service accounts](https://docs.aws.amazon.com/eks/latest/eksctl/iamserviceaccounts.html)
-- [Envelope encryption](https://docs.aws.amazon.com/eks/latest/userguide/envelope-encryption.html)
-- [EKS Security Best Practices](https://aws.github.io/aws-eks-best-practices/security/docs/)
-
-## Load balancing and storage
-
-- [AWS Load Balancer Controller](https://docs.aws.amazon.com/eks/latest/userguide/aws-load-balancer-controller.html)
-- [AWS EKS Load Balancing best practices](https://docs.aws.amazon.com/eks/latest/best-practices/load-balancing.html)
-- [EBS CSI](https://docs.aws.amazon.com/eks/latest/userguide/ebs-csi.html)
-- [EFS CSI](https://docs.aws.amazon.com/eks/latest/userguide/efs-csi.html)
-- [EKS Add-ons](https://docs.aws.amazon.com/eks/latest/userguide/eks-add-ons.html)
-
-## Autoscaling and operations
-
-- [EKS Best Practices](https://aws.github.io/aws-eks-best-practices/)
-- [Karpenter Best Practices](https://aws.github.io/aws-eks-best-practices/karpenter/)
-- [EKS managed node groups](https://docs.aws.amazon.com/eks/latest/userguide/managed-node-groups.html)
-- [CloudWatch Observability add-on](https://docs.aws.amazon.com/eks/latest/userguide/workloads-add-ons-available-eks.html)
-
----
-
-# Финальное резюме курса
-
-После этого курса ты должен смотреть на EKS не как на «кластер Kubernetes в AWS», а как на **платформу**, состоящую из нескольких слоёв:
-
-```text
-                 +----------------------+
-                 |     Applications     |
-                 +----------+-----------+
-                            |
-                 +----------+-----------+
-                 |   Kubernetes API     |
-                 | Workloads / Services  |
-                 +----------+-----------+
-                            |
-          +-----------------+-----------------+
-          |                 |                 |
-        Security       Observability       Delivery
-          |                 |                 |
-     IAM/RBAC/NP       logs/metrics       GitOps/CI
-          |                 |                 |
-          +-----------------+-----------------+
-                            |
-                  EKS infrastructure
-                            |
-       +--------------------+--------------------+
-       |                    |                    |
-      VPC               Compute              Storage
-       |             Auto Mode / MNG        EBS/EFS
-       |                 Karpenter              |
-       +--------------------+--------------------+
-                            |
-                         AWS Cloud
-```
-
-Главный production-навык — не знать сто команд `kubectl`, а понимать **какой слой отвечает за проблему, где искать evidence и какое изменение минимально и безопасно исправляет ситуацию**.
-
----
-
-## Лицензия
-
-MIT — используй, изменяй, форкай и делись курсом.
+Если материал был полезен — поставьте звезду репозиторию, поделитесь с коллегами, которые начинают работу с EKS, и открывайте issue/pull request с исправлениями или дополнениями по мере того, как AWS обновляет сервис.
