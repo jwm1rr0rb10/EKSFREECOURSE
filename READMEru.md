@@ -113,7 +113,7 @@ curl -sL "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_Li
 # helm
 curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
-# по желанию, но сильно облегчает жизнь
+# по желанию, но сильно облегчает жизнь (Homebrew есть для macOS и Linux)
 brew install kubectx k9s stern   # переключение контекстов, TUI, логи из нескольких pod
 ```
 
@@ -449,6 +449,8 @@ kubectl get nodes                     # узел приехал сам, за ~1 
 
 Это и есть главный эффект Auto Mode: **узлы следуют за pod**, а не наоборот.
 
+Учти две вещи, которые Auto Mode по умолчанию **не** создаёт: `StorageClass` для EBS (provisioner `ebs.csi.eks.amazonaws.com`, модуль 9.2) и `IngressClass` для ALB (controller `eks.amazonaws.com/alb`, модуль 8.2). Без них PVC повиснут в `Pending`, а Ingress не получит балансировщик.
+
 ## 2.3 Классический кластер с managed node group
 
 Так выглядит кластер, который ты чаще всего встретишь на работе. Файл `cluster.yaml`:
@@ -488,8 +490,8 @@ managedNodeGroups:
     tags:
       Environment: demo
     iam:
-      withAddonPolicies:
-        ebs: true
+      withAddonPolicies:       # для учёбы: права драйверов прямо на роли узла;
+        ebs: true              # в проде выдавай их через Pod Identity (модуль 10)
         cloudWatch: true
 
 addons:
@@ -521,9 +523,9 @@ eksctl create cluster -f cluster.yaml
 
 ```hcl
 terraform {
-  required_version = ">= 1.6"
+  required_version = ">= 1.5.7"
   required_providers {
-    aws = { source = "hashicorp/aws", version = "~> 5.0" }
+    aws = { source = "hashicorp/aws", version = "~> 6.59" }   # модулю EKS v21 нужен AWS provider 6.59+
   }
 }
 
@@ -538,7 +540,7 @@ locals {
 
 module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
-  version = "~> 5.0"
+  version = "~> 6.0"
 
   name = "${local.name}-vpc"
   cidr = "10.0.0.0/16"
@@ -557,30 +559,48 @@ module "vpc" {
   tags = local.tags
 }
 
+# IAM-роль для EBS CSI через Pod Identity, а не права на роли узла
+module "ebs_csi_pod_identity" {
+  source  = "terraform-aws-modules/eks-pod-identity/aws"
+  version = "~> 2.0"
+
+  name                      = "${local.name}-ebs-csi"
+  attach_aws_ebs_csi_policy = true
+
+  tags = local.tags
+}
+
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
-  version = "~> 20.0"
+  version = "~> 21.0"                # в v21 у переменных убрали префикс cluster_
 
-  cluster_name    = local.name
-  cluster_version = "1.36"
+  name               = local.name
+  kubernetes_version = "1.36"
 
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnets
 
-  cluster_endpoint_public_access = true
-  enable_irsa                    = true
+  endpoint_public_access = true
+  enable_irsa            = true
 
   # современный способ доступа: access entries вместо aws-auth
   authentication_mode                      = "API_AND_CONFIG_MAP"
   enable_cluster_creator_admin_permissions = true
 
-  cluster_addons = {
-    vpc-cni                = { most_recent = true }
+  addons = {
+    # before_compute: ставим до узлов, чтобы они сразу поднялись с сетью и агентом Pod Identity
+    vpc-cni                = { most_recent = true, before_compute = true }
+    eks-pod-identity-agent = { most_recent = true, before_compute = true }
     coredns                = { most_recent = true }
     kube-proxy             = { most_recent = true }
-    aws-ebs-csi-driver     = { most_recent = true }
-    eks-pod-identity-agent = { most_recent = true }
     metrics-server         = { most_recent = true }
+    aws-ebs-csi-driver = {
+      most_recent = true
+      pod_identity_association = [{
+        role_arn        = module.ebs_csi_pod_identity.iam_role_arn
+        service_account = "ebs-csi-controller-sa"
+      }]
+    }
   }
 
   eks_managed_node_groups = {
@@ -591,8 +611,21 @@ module "eks" {
       min_size       = 2
       max_size       = 6
       desired_size   = 2
-      disk_size      = 50
       labels         = { workload = "general" }
+
+      # disk_size работает только без собственного launch template,
+      # а модуль создаёт его по умолчанию, поэтому диск задаём так
+      block_device_mappings = {
+        xvda = {
+          device_name = "/dev/xvda"
+          ebs = {
+            volume_size           = 50
+            volume_type           = "gp3"
+            encrypted             = true
+            delete_on_termination = true
+          }
+        }
+      }
     }
   }
 
@@ -809,9 +842,13 @@ aws eks associate-access-policy --cluster-name demo \
   --access-scope type=namespace,namespaces=team-a
 ```
 
-**Read-only для дежурного или аудитора:**
+**Read-only для дежурного или аудитора** (access entry всегда создаётся первым, политика привязывается к нему):
 
 ```bash
+aws eks create-access-entry --cluster-name demo \
+  --principal-arn arn:aws:iam::111122223333:role/OnCallViewer \
+  --type STANDARD
+
 aws eks associate-access-policy --cluster-name demo \
   --principal-arn arn:aws:iam::111122223333:role/OnCallViewer \
   --policy-arn arn:aws:eks::aws:cluster-access-policy/AmazonEKSViewPolicy \
@@ -823,10 +860,10 @@ aws eks associate-access-policy --cluster-name demo \
 | Политика | Что даёт |
 |---|---|
 | `AmazonEKSClusterAdminPolicy` | Полный `cluster-admin` |
-| `AmazonEKSAdminPolicy` | Админ, но без некоторых кластерных объектов |
+| `AmazonEKSAdminPolicy` | Аналог встроенной роли `admin`: почти все права на ресурсы namespace, включая Role и RoleBinding; для всего кластера — ClusterAdmin |
 | `AmazonEKSEditPolicy` | Создавать и менять workload |
 | `AmazonEKSViewPolicy` | Только чтение |
-| `AmazonEKSAdminViewPolicy` | Чтение, включая Secret-метаданные |
+| `AmazonEKSAdminViewPolicy` | Чтение всех ресурсов кластера, включая содержимое Secret (в отличие от ViewPolicy) |
 | `AmazonEKSAutoNodePolicy`, `AmazonEKSNetworkingClusterPolicy` и другие | Служебные, для Auto Mode и контроллеров |
 
 Если готовых политик мало — маппишь IAM-роль в свою Kubernetes-группу и пишешь RBAC сам:
@@ -924,8 +961,8 @@ data:
 **Три правила работы с `aws-auth`:**
 
 1. **Никогда не редактируй его без бэкапа.** `kubectl -n kube-system get cm aws-auth -o yaml > aws-auth.bak.yaml`.
-2. **Не удаляй строку с node role.** Узлы мгновенно уйдут в `NotReady` и не вернутся.
-3. Если сломал и потерял доступ всем — восстанавливай через access entry той IAM-личностью, которая создавала кластер, или через `--principal-arn` создателя.
+2. **Не удаляй строку с node role.** Если для этой роли нет access entry, узлы через несколько минут потеряют авторизацию и уйдут в `NotReady`.
+3. Если сломал и потерял доступ всем, возвращай его через EKS API, а не через kubectl: access entries создаёт любая IAM-личность с правами `eks:CreateAccessEntry` и `eks:AssociateAccessPolicy`. Если кластер ещё в режиме `CONFIG_MAP`, сначала переключи его в `API_AND_CONFIG_MAP`.
 
 Миграция: включи `API_AND_CONFIG_MAP`, создай access entries для всех, кто есть в `aws-auth`, проверь доступ, вычисти ConfigMap, переключись на `API`.
 
@@ -988,7 +1025,7 @@ eksctl create nodegroup \
 
 - **Graceful drain при обновлении и удалении:** EKS сам cordon/drain узла, уважая PodDisruptionBudget;
 - **Автоматическая привязка к кластеру:** узел появится в `kubectl get nodes` без ручного `bootstrap.sh`;
-- **Node health monitoring:** узел с проблемой заменяется;
+- **Node health monitoring и auto repair:** при включённом node auto repair (настройка node group) EKS сам заменяет узел с проблемой;
 - **Метки и taint на уровне API EKS**, видимые в консоли и Terraform;
 - **Spot с несколькими типами инстансов и обработкой прерываний.**
 
@@ -1007,7 +1044,7 @@ managedNodeGroups:
     volumeSize: 50
     volumeIOPS: 3000
     privateNetworking: true
-    maxPodsPerNode: 110                                     # см. модуль 7 про лимиты ENI
+    maxPodsPerNode: 110                                     # только вместе с prefix delegation (модуль 7.3): без неё у m6i.large потолок 29
     updateConfig:
       maxUnavailablePercentage: 25                          # скорость роллинга при обновлении
     labels:
@@ -1029,8 +1066,10 @@ Spot экономит до 90%, но инстанс могут забрать з
 
 ```yaml
 # нагрузку на Spot отправляем метками, системное держим на On-Demand
+# метку ставит тот, кто создал узел: managed node group — eks.amazonaws.com/capacityType: SPOT,
+# Karpenter — karpenter.sh/capacity-type: spot
       nodeSelector:
-        karpenter.sh/capacity-type: spot
+        eks.amazonaws.com/capacityType: SPOT
       tolerations:
         - key: workload
           value: batch
@@ -1081,15 +1120,17 @@ eksctl create fargateprofile \
 Auto Mode (GA с декабря 2024) — это упакованный AWS-ом Karpenter плюс набор контроллеров:
 
 - **compute:** провижинит и консолидирует узлы под неразмещённые pod;
-- **storage:** EBS CSI уже внутри, `StorageClass` создаётся автоматически;
-- **networking:** Load Balancer Controller внутри, ALB/NLB создаются по Ingress и Service;
+- **storage:** EBS CSI уже внутри, но `StorageClass` с provisioner `ebs.csi.eks.amazonaws.com` нужно создать самому (модуль 9.2);
+- **networking:** Load Balancer Controller внутри, но для ALB нужен свой `IngressClass` с controller `eks.amazonaws.com/alb`, а для NLB — `loadBalancerClass: eks.amazonaws.com/nlb` в Service (модуль 8.2);
 - **identity:** Pod Identity Agent внутри;
 - **обслуживание:** узел живёт **максимум 21 день** и заменяется на свежий AMI автоматически.
 
+Включение на существующем кластере. Сначала подготовь IAM: роли кластера нужны политики `AmazonEKSClusterPolicy`, `AmazonEKSComputePolicy`, `AmazonEKSBlockStoragePolicy`, `AmazonEKSLoadBalancingPolicy`, `AmazonEKSNetworkingPolicy` и действие `sts:TagSession` в trust policy. Узлам нужна отдельная роль (AWS предлагает имя `AmazonEKSAutoNodeRole`) с политиками `AmazonEKSWorkerNodeMinimalPolicy` и `AmazonEC2ContainerRegistryPullOnly`; роль кластера для узлов использовать нельзя. Аддоны должны быть не старше минимальных версий из документации Auto Mode.
+
 ```bash
-# включить на существующем кластере
+# compute, block storage и load balancing включаются одним запросом
 aws eks update-cluster-config --name demo \
-  --compute-config enabled=true,nodePools=general-purpose,system \
+  --compute-config '{"enabled":true,"nodeRoleArn":"arn:aws:iam::111122223333:role/AmazonEKSAutoNodeRole","nodePools":["general-purpose","system"]}' \
   --kubernetes-network-config '{"elasticLoadBalancing":{"enabled":true}}' \
   --storage-config '{"blockStorage":{"enabled":true}}'
 ```
@@ -1102,7 +1143,7 @@ kind: NodeClass
 metadata:
   name: spot-class
 spec:
-  role: AutoModeNodeRole
+  role: AutoModeNodeRole        # если это не та роль, что указана в настройках кластера, создай для неё access entry типа EC2 с политикой AmazonEKSAutoNodePolicy
   subnetSelectorTerms:
     - tags: { "kubernetes.io/role/internal-elb": "1" }
   securityGroupSelectorTerms:
@@ -1235,7 +1276,7 @@ kubectl uncordon ip-10-0-70-12.eu-central-1.compute.internal
 
 ```bash
 export CLUSTER_NAME=demo
-export KARPENTER_VERSION=1.8.0
+export KARPENTER_VERSION=1.15.1      # сверяй с матрицей совместимости: для EKS 1.36 нужен Karpenter 1.13+
 
 helm upgrade --install karpenter oci://public.ecr.aws/karpenter/karpenter \
   --version "${KARPENTER_VERSION}" \
@@ -1308,7 +1349,7 @@ metadata:
 spec:
   amiFamily: AL2023
   amiSelectorTerms:
-    - alias: al2023@latest
+    - alias: al2023@latest     # в проде фиксируй версию AMI (al2023@vYYYYMMDD) и обновляй её осознанно
   role: "KarpenterNodeRole-demo"
   subnetSelectorTerms:
     - tags: { "karpenter.sh/discovery": "demo" }
@@ -1458,7 +1499,7 @@ resources:
 - **`requests.cpu`** ставь близко к реальному p50-p70 потреблению, не «на глазок ×5». Завышенные requests — главная причина дорогого кластера.
 - **`limits.cpu` лучше не ставить вовсе** для латентно-чувствительных сервисов: CPU throttling из-за CFS quota даёт загадочные всплески задержки. Исключение — мультитенантный кластер, где нужна защита от шумного соседа.
 - **`limits.memory` ставь всегда** и близко к `requests.memory`: память не сжимается, и без лимита один pod с утечкой съест узел.
-- **`requests.memory == limits.memory`** даёт класс `Guaranteed` — самый защищённый от вытеснения.
+- **`requests.memory == limits.memory`**: pod никогда не превысит свой memory request, поэтому при нехватке памяти на узле он окажется среди последних кандидатов на вытеснение. Класс `Guaranteed` получится, только если у всех контейнеров request = limit и по CPU, и по памяти; без `limits.cpu` pod остаётся `Burstable`, и для большинства сервисов это нормальный компромисс.
 
 ```bash
 kubectl top pods -n demo --containers        # фактическое потребление
@@ -1542,7 +1583,7 @@ metadata:
 spec:
   scaleTargetRef:
     name: worker
-  minReplicaCount: 0                 # scale-to-zero, чего HPA не умеет
+  minReplicaCount: 0                 # scale-to-zero: HPA в 1.36 умеет это только с alpha feature gate
   maxReplicaCount: 50
   pollingInterval: 15
   cooldownPeriod: 120
@@ -1554,9 +1595,20 @@ spec:
         queueURL: https://sqs.eu-central-1.amazonaws.com/111122223333/jobs
         queueLength: "20"            # одна реплика на каждые 20 сообщений
         awsRegion: eu-central-1
+---
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: keda-aws-creds
+  namespace: demo
+spec:
+  podIdentity:
+    provider: aws                    # креды IAM-роли оператора KEDA (ServiceAccount keda-operator в namespace keda)
 ```
 
-KEDA умеет десятки источников: SQS, Kafka, RabbitMQ, Prometheus-запрос, CloudWatch-метрика, cron, Postgres-запрос. Для batch-нагрузки `minReplicaCount: 0` плюс Karpenter на Spot — самая экономная комбинация в EKS.
+Роли оператора KEDA нужно право `sqs:GetQueueAttributes` на эту очередь.
+
+KEDA умеет десятки источников: SQS, Kafka, RabbitMQ, Prometheus-запрос, CloudWatch-метрика, cron, Postgres-запрос. Для batch-нагрузки `minReplicaCount: 0` плюс Karpenter на Spot — самая экономная комбинация в EKS. В Kubernetes 1.37 HPA научился масштабировать в ноль по Object- и External-метрикам (beta, включено по умолчанию), но для событийной нагрузки KEDA всё равно удобнее: у неё готовые scalers для десятков источников.
 
 ## 6.6 VPA и right-sizing
 
@@ -1581,7 +1633,7 @@ spec:
 kubectl -n demo describe vpa web | sed -n '/Recommendation/,$p'
 ```
 
-Практичный путь: держи VPA в режиме `Off` как советчика, а решение о `requests` принимай сам (или через CI-проверку). В Kubernetes 1.33+ есть **in-place pod resize** (beta), который со временем уберёт необходимость в перезапуске.
+Практичный путь: держи VPA в режиме `Off` как советчика, а решение о `requests` принимай сам (или через CI-проверку). **In-place resize** контейнеров (изменение CPU и памяти без пересоздания pod) — beta с 1.33 и GA с 1.35, а в 1.36 такой же resize появился в beta для ресурсов уровня pod. Свежие версии VPA умеют режим `InPlaceOrRecreate`, который пользуется этим и пересоздаёт pod, только когда иначе нельзя.
 
 ## 6.7 PodDisruptionBudget: защита при любых заменах узлов
 
@@ -1619,7 +1671,7 @@ PDB влияет на всё, что делает drain: обновление no
 
 Правило: по зонам — `DoNotSchedule` (иначе отказ одной AZ уложит сервис), по узлам — `ScheduleAnyway` (иначе pod будут висеть в `Pending` из-за нехватки узлов).
 
-Помни про стоимость: трафик между AZ стоит $0.01/ГБ в каждую сторону. Для чатливых сервисов рассмотри `trafficDistribution: PreferSameZone` (стабильно с 1.36) на Service:
+Помни про стоимость: трафик между AZ стоит $0.01/ГБ в каждую сторону. Для чатливых сервисов рассмотри `trafficDistribution: PreferSameZone` на Service (GA с 1.35; это новое имя для `PreferClose`, там же появился `PreferSameNode`):
 
 ```yaml
 apiVersion: v1
@@ -1668,8 +1720,8 @@ spec:
 ```
 Узел m6i.large:
   ENI #1 (primary)   10.0.70.12   → IP узла + до 9 IP для pod
-  ENI #2             10.0.70.45   → до 10 IP для pod
-  ENI #3             10.0.70.98   → до 10 IP для pod
+  ENI #2             10.0.70.45   → свой primary IP + до 9 IP для pod
+  ENI #3             10.0.70.98   → свой primary IP + до 9 IP для pod
   ...
   pod видны в VPC напрямую: 10.0.70.31, 10.0.70.55 ...
 ```
@@ -1694,11 +1746,12 @@ max_pods = (число ENI × (IP на ENI − 1)) + 2
 | `m6i.large` | 3 | 10 | **29** |
 | `m6i.xlarge` | 4 | 15 | 58 |
 | `m6i.2xlarge` | 4 | 15 | 58 |
-| `m6i.4xlarge` | 8 | 30 | 234 (ограничивается 110 по рекомендации k8s) |
+| `m6i.4xlarge` | 8 | 30 | 234 (рекомендуемый потолок — 110, см. модуль 18) |
 
 ```bash
-# точное значение для инстанса
-curl -s https://raw.githubusercontent.com/awslabs/amazon-eks-ami/master/templates/shared/runtime/eni-max-pods.txt | grep '^m6i.large'
+# исходные цифры для формулы берём из EC2 API
+aws ec2 describe-instance-types --instance-types m6i.large \
+  --query 'InstanceTypes[].NetworkInfo.{ENI:MaximumNetworkInterfaces,IPv4perENI:Ipv4AddressesPerInterface}'
 kubectl describe node <node> | grep -i "pods:"
 ```
 
@@ -1709,12 +1762,16 @@ kubectl describe node <node> | grep -i "pods:"
 С IPv4 prefix delegation ENI получает не отдельные IP, а **/28-префиксы** (16 адресов).
 
 ```bash
-kubectl set env daemonset aws-node -n kube-system ENABLE_PREFIX_DELEGATION=true
-kubectl set env daemonset aws-node -n kube-system WARM_PREFIX_TARGET=1
-kubectl rollout status daemonset aws-node -n kube-system
+# vpc-cni как EKS add-on: настройки через configuration-values (подробнее в 11.2)
+aws eks update-addon --cluster-name demo --addon-name vpc-cni \
+  --configuration-values '{"env":{"ENABLE_PREFIX_DELEGATION":"true","WARM_PREFIX_TARGET":"1"}}' \
+  --resolve-conflicts PRESERVE
+
+# самоуправляемый vpc-cni (не аддон):
+# kubectl set env daemonset aws-node -n kube-system ENABLE_PREFIX_DELEGATION=true WARM_PREFIX_TARGET=1
 ```
 
-Эффект: `m6i.large` поднимается с 29 до 110 pod. Цена: префиксы выделяются целиком, поэтому подсеть должна иметь **непрерывные блоки /28**. На фрагментированной подсети выделение будет падать. Включать лучше сразу на новом кластере, а не на живом заполненном.
+Эффект: `m6i.large` поднимается с 29 до 110 pod. Но лимит pod kubelet получает при старте узла, поэтому работающие узлы нужно заменить на новые: managed node group без своего AMI посчитает новый лимит сама, в Karpenter задай `kubelet.maxPods` в EC2NodeClass, в своём launch template — в конфигурации nodeadm. Проверка: `kubectl describe node <node> | grep -i "pods:"`. Цена: префиксы выделяются целиком, поэтому подсеть должна иметь **непрерывные блоки /28**. На фрагментированной подсети выделение будет падать. Включать лучше сразу на новом кластере, а не на живом заполненном.
 
 ## 7.4 Когда IP всё-таки кончились
 
@@ -1732,6 +1789,7 @@ Warning  FailedCreatePodSandBox  ... failed to assign an IP address to container
 2. **Добавить secondary CIDR в VPC** (например, `100.64.0.0/16` из зарезервированного диапазона CG-NAT) и вынести pod туда через **custom networking**:
 
 ```bash
+# для vpc-cni как EKS add-on те же переменные задавай через --configuration-values (11.2)
 kubectl set env daemonset aws-node -n kube-system AWS_VPC_K8S_CNI_CUSTOM_NETWORK_CFG=true
 kubectl set env daemonset aws-node -n kube-system ENI_CONFIG_LABEL_DEF=topology.kubernetes.io/zone
 ```
@@ -1795,11 +1853,19 @@ spec:
 
 ## 7.7 Network policies
 
-VPC CNI умеет native network policy (не нужен Calico):
+VPC CNI умеет native network policy (не нужен Calico). Включается она ключом `enableNetworkPolicy` в конфигурации аддона, а не переменной окружения:
 
 ```bash
-kubectl set env daemonset aws-node -n kube-system ENABLE_NETWORK_POLICY=true
+aws eks update-addon --cluster-name demo --addon-name vpc-cni \
+  --configuration-values '{"enableNetworkPolicy":"true"}' \
+  --resolve-conflicts PRESERVE
+
+# проверка: у контейнера aws-eks-nodeagent должен появиться флаг --enable-network-policy=true
+kubectl -n kube-system get ds aws-node \
+  -o jsonpath='{.spec.template.spec.containers[?(@.name=="aws-eks-nodeagent")].args}'
 ```
+
+В Helm-чарте самоуправляемого VPC CNI то же самое включает значение `enableNetworkPolicy=true`. Пока политика не включена, объекты NetworkPolicy спокойно создаются, но ничего не блокируют. Если в конфигурации аддона уже есть другие ключи (prefix delegation и т. п.), передавай их вместе в одном JSON, как в 11.2.
 
 ```yaml
 # deny all входящего в namespace
@@ -1831,7 +1897,7 @@ spec:
           port: 8080
 ```
 
-В 2026 году EKS добавил **Admin Policies** и **Application Network Policies**: платформенная команда может задать правила уровня кластера, которые продуктовые команды не переопределят своими NetworkPolicy. Это правильный инструмент для мультитенантного кластера.
+В декабре 2025 года EKS добавил **Admin Policies** — ресурс `ClusterNetworkPolicy` с уровнями Admin (обязательные правила, которые продуктовые команды не переопределят своими NetworkPolicy) и Baseline (умолчания, которые переопределить можно); нужен VPC CNI v1.21.1+. Для Auto Mode есть ещё **Application Network Policies** с фильтрацией egress по DNS-именам. Это правильные инструменты для мультитенантного кластера.
 
 Не забудь про egress: без него pod может ходить куда угодно в интернет.
 
@@ -1912,8 +1978,8 @@ kubectl -n kube-system exec ds/aws-node -- /app/grpc-health-probe -addr localhos
 Без него `Ingress` в EKS не делает ничего (в Auto Mode он уже встроен).
 
 ```bash
-# 1. IAM-политика
-curl -o iam-policy.json https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/main/docs/install/iam_policy.json
+# 1. IAM-политика из того же релиза, что и контроллер (здесь v3.6.2)
+curl -o iam-policy.json https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v3.6.2/docs/install/iam_policy.json
 aws iam create-policy --policy-name AWSLoadBalancerControllerIAMPolicy --policy-document file://iam-policy.json
 
 # 2. ServiceAccount + Pod Identity (или IRSA, см. модуль 10)
@@ -1930,10 +1996,40 @@ helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
   -n kube-system \
   --set clusterName=demo \
   --set serviceAccount.create=true \
-  --set serviceAccount.name=aws-load-balancer-controller
+  --set serviceAccount.name=aws-load-balancer-controller \
+  --set region=eu-central-1 \
+  --set vpcId=vpc-0abc123                 # регион и VPC явно: см. абзац ниже
 
 kubectl -n kube-system get deploy aws-load-balancer-controller
 ```
+
+При `httpPutResponseHopLimit: 1` (модуль 10.4; так же по умолчанию настраивает узлы Terraform-модуль EKS v21) контроллер не может узнать регион и VPC из метаданных инстанса, поэтому `region` и `vpcId` лучше передавать всегда.
+
+**В Auto Mode** контроллер уже встроен, но классы для него нужно создать самому:
+
+```yaml
+apiVersion: eks.amazonaws.com/v1
+kind: IngressClassParams
+metadata:
+  name: alb
+spec:
+  scheme: internet-facing
+---
+apiVersion: networking.k8s.io/v1
+kind: IngressClass
+metadata:
+  name: alb
+  annotations:
+    ingressclass.kubernetes.io/is-default-class: "true"
+spec:
+  controller: eks.amazonaws.com/alb
+  parameters:
+    apiGroup: eks.amazonaws.com
+    kind: IngressClassParams
+    name: alb
+```
+
+NLB в Auto Mode создаётся из Service с `spec.loadBalancerClass: eks.amazonaws.com/nlb` (у самоуправляемого контроллера класс `service.k8s.aws/nlb`). Часть аннотаций Ingress в Auto Mode работает иначе или не поддерживается (например, OIDC-аутентификация на ALB), поэтому сверяйся с таблицей отличий в документации.
 
 ## 8.3 Ingress с ALB: рабочий пример
 
@@ -1997,7 +2093,7 @@ metadata:
     service.beta.kubernetes.io/aws-load-balancer-type: external
     service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
     service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
-    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+    service.beta.kubernetes.io/aws-load-balancer-attributes: load_balancing.cross_zone.enabled=true
     service.beta.kubernetes.io/aws-load-balancer-healthcheck-protocol: tcp
 spec:
   type: LoadBalancer
@@ -2013,22 +2109,50 @@ spec:
 
 Ingress-NGINX был снят с поддержки апстримом в марте 2026 года, и Gateway API стал основным способом описывать вход в кластер.
 
+Load Balancer Controller поддерживает Gateway API для ALB (HTTPRoute, GRPCRoute) и NLB (TCP, UDP, TLS). Сначала поставь CRD: стандартные из Gateway API и собственные CRD контроллера. Увидев их, контроллер сам включит Gateway-режим:
+
+```bash
+kubectl apply --server-side=true -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.0/standard-install.yaml
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v3.6.2/config/crd/gateway/gateway-crds.yaml
+```
+
+Сертификат и схема балансировщика задаются не аннотациями, а ресурсом `LoadBalancerConfiguration`:
+
 ```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: alb
+spec:
+  controllerName: gateway.k8s.aws/alb   # для VPC Lattice есть класс amazon-vpc-lattice от AWS Gateway API Controller
+---
+apiVersion: gateway.k8s.aws/v1
+kind: LoadBalancerConfiguration
+metadata:
+  name: prod-gw-config
+  namespace: infra
+spec:
+  scheme: internet-facing
+  listenerConfigurations:
+    - protocolPort: HTTPS:443
+      defaultCertificate: arn:aws:acm:eu-central-1:111122223333:certificate/xxxx
+---
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
   name: prod-gw
   namespace: infra
 spec:
-  gatewayClassName: alb                 # или amazon-vpc-lattice
+  gatewayClassName: alb
+  infrastructure:
+    parametersRef:
+      group: gateway.k8s.aws
+      kind: LoadBalancerConfiguration
+      name: prod-gw-config
   listeners:
     - name: https
       protocol: HTTPS
       port: 443
-      tls:
-        mode: Terminate
-        options:
-          alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:...
       allowedRoutes:
         namespaces: { from: Selector, selector: { matchLabels: { gateway-access: "true" } } }
 ---
@@ -2061,11 +2185,13 @@ spec:
 # ExternalDNS: сам создаёт записи в Route 53 по Ingress и Service
 helm repo add external-dns https://kubernetes-sigs.github.io/external-dns
 helm install external-dns external-dns/external-dns -n kube-system \
-  --set provider=aws \
+  --set provider.name=aws \
   --set policy=sync \
   --set txtOwnerId=demo-cluster \
   --set domainFilters[0]=example.com
 ```
+
+ExternalDNS нужны права на изменение записей в твоей зоне Route 53 (готовая политика есть в документации ExternalDNS): выдай их через Pod Identity, как в модуле 10.
 
 ```yaml
 metadata:
@@ -2134,7 +2260,7 @@ spec:
 |---|---|---|---|---|---|
 | **EBS (gp3)** | ReadWriteOnce, один pod | **Только одна AZ** | Очень низкая | ~$0.08/ГБ-мес | БД, Kafka, Elasticsearch, любой StatefulSet |
 | **EFS** | ReadWriteMany, много pod и AZ | Регион | Средняя | ~$0.30/ГБ-мес (+ throughput) | Общие файлы, uploads, legacy с shared-диском |
-| **Mountpoint for S3** | Много pod, чтение и запись-append | Регион | Высокая | ~$0.023/ГБ-мес | Датасеты, модели, артефакты, логи |
+| **Mountpoint for S3** | Много pod; чтение и последовательная запись новых файлов | Регион | Высокая | ~$0.023/ГБ-мес | Датасеты, модели, артефакты, логи |
 | **FSx for Lustre** | ReadWriteMany, высокая полоса | AZ | Низкая | Дорого | HPC, ML-тренировки |
 | **emptyDir / локальный NVMe** | Только pod/узел | Узел | Минимальная | Внутри цены инстанса | Кэш, временные файлы, scratch |
 
@@ -2165,6 +2291,26 @@ parameters:
   kmsKeyId: arn:aws:kms:eu-central-1:111122223333:key/xxxx
 ```
 
+В Auto Mode драйвер другой, и StorageClass для него нужно создать самому:
+
+```yaml
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: auto-ebs-sc
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"   # default-класс в кластере должен быть один
+provisioner: ebs.csi.eks.amazonaws.com       # не ebs.csi.aws.com
+volumeBindingMode: WaitForFirstConsumer
+allowedTopologies:                            # такие тома работают только на узлах Auto Mode
+  - matchLabelExpressions:
+      - key: eks.amazonaws.com/compute-type
+        values: ["auto"]
+parameters:
+  type: gp3
+  encrypted: "true"
+```
+
 ```yaml
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -2192,6 +2338,10 @@ kubectl -n demo get pvc data -w      # FileSystemResizePending → Bound
 
 ## 9.3 StatefulSet и хранилище
 
+```bash
+kubectl -n demo create secret generic pg-secret --from-literal=password='change-me'
+```
+
 ```yaml
 apiVersion: apps/v1
 kind: StatefulSet
@@ -2210,6 +2360,12 @@ spec:
       containers:
         - name: pg
           image: postgres:17
+          env:
+            - name: POSTGRES_PASSWORD           # без пароля официальный образ postgres не стартует
+              valueFrom:
+                secretKeyRef: { name: pg-secret, key: password }
+            - name: PGDATA                      # подкаталог: в корне нового тома лежит lost+found,
+              value: /var/lib/postgresql/data/pgdata   # и initdb откажется работать с непустым каталогом
           volumeMounts:
             - { name: data, mountPath: /var/lib/postgresql/data }
           resources:
@@ -2226,13 +2382,22 @@ spec:
         accessModes: ["ReadWriteOnce"]
         storageClassName: gp3
         resources: { requests: { storage: 100Gi } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: pg, namespace: demo }
+spec:
+  clusterIP: None                     # headless Service из serviceName: стабильные имена pg-0.pg, pg-1.pg и т. д.
+  selector: { app: pg }
+  ports: [{ port: 5432 }]
 ```
 
 Что нужно помнить:
 
+- это три **независимых** инстанса Postgres, а не кластер с репликацией: репликацию и failover даёт оператор (например, CloudNativePG);
 - каждая реплика получает **свой** PVC, привязанный к своей AZ навсегда;
 - при удалении StatefulSet PVC **остаются** (это защита данных, но и источник забытых счетов);
-- с Kubernetes 1.32+ есть автоматическая очистка PVC, созданных StatefulSet, при удалении;
+- с Kubernetes 1.32 (GA) автоочистку таких PVC можно включить полем `persistentVolumeClaimRetentionPolicy` (`whenDeleted: Delete`), по умолчанию PVC сохраняются;
 - узел с таким pod нельзя просто заменить в другой AZ: Karpenter должен получить требование по зоне.
 
 **И главный вопрос:** нужна ли тебе база в Kubernetes? В AWS есть RDS, Aurora, ElastiCache, MSK, OpenSearch. Держать в кластере stateful-системы стоит тогда, когда есть зрелый оператор и команда, которая умеет его обслуживать. Иначе managed-сервис дешевле по совокупным затратам, даже если по прайсу дороже.
@@ -2279,24 +2444,38 @@ kind: PersistentVolume
 metadata:
   name: models
 spec:
-  capacity: { storage: 1200Gi }
+  capacity: { storage: 1200Gi }        # драйвер это поле игнорирует, но оно обязательно
   accessModes: ["ReadWriteMany"]
+  storageClassName: ""                 # статический PV, без dynamic provisioning
+  claimRef: { namespace: ml, name: models }
+  mountOptions:                        # опции Mountpoint задаются здесь, а не в volumeAttributes
+    - allow-delete
+    - region eu-central-1
   csi:
     driver: s3.csi.aws.com
     volumeHandle: models-volume
     volumeAttributes:
       bucketName: my-ml-models
-      mountOptions: "allow-delete,region eu-central-1"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: { name: models, namespace: ml }
+spec:
+  accessModes: ["ReadWriteMany"]
+  storageClassName: ""
+  volumeName: models
+  resources: { requests: { storage: 1200Gi } }
 ```
+
+Драйверу нужны права на бакет: их выдают роли его ServiceAccount (детали в документации аддона).
 
 Это не файловая система общего назначения: нет частичной перезаписи файла, нет `rename` в обычном смысле, и задержка высокая. Идеально для «прочитать датасет или модель», плохо для «БД или логи с fsync».
 
 ## 9.6 Снапшоты и бэкапы
 
 ```bash
-# CSI snapshotter (в EKS его надо поставить отдельно)
-kubectl apply -k "github.com/kubernetes-csi/external-snapshotter/client/config/crd"
-kubectl apply -k "github.com/kubernetes-csi/external-snapshotter/deploy/kubernetes/snapshot-controller"
+# snapshot controller по умолчанию не установлен; проще всего поставить его как EKS add-on
+aws eks create-addon --cluster-name demo --addon-name snapshot-controller
 ```
 
 ```yaml
@@ -2320,7 +2499,7 @@ spec:
 velero install --provider aws --bucket my-velero-bucket \
   --backup-location-config region=eu-central-1 \
   --snapshot-location-config region=eu-central-1 \
-  --plugins velero/velero-plugin-for-aws:v1.10.0
+  --plugins velero/velero-plugin-for-aws:v1.14.4      # версия плагина должна подходить к версии Velero: v1.14.x — для Velero v1.18.x
 
 velero backup create prod-daily --include-namespaces prod --wait
 velero restore create --from-backup prod-daily
@@ -2335,7 +2514,7 @@ velero restore create --from-backup prod-daily
 | Pod `Pending`, в Events `volume node affinity conflict` | PVC в одной AZ, свободные узлы в другой | `WaitForFirstConsumer`, узлы во всех AZ, topology в NodePool |
 | PVC вечно `Pending` | Нет CSI-драйвера, нет прав у его роли, нет StorageClass | `kubectl get sc`, логи `ebs-csi-controller` |
 | `Multi-Attach error` | Пытаются подключить EBS к двум pod | EBS это RWO; нужен EFS или один pod |
-| Диск не расширяется | `allowVolumeExpansion: false` | Поправь StorageClass (уже созданный PV придётся пересоздать) |
+| Диск не расширяется | `allowVolumeExpansion: false` | Включи `allowVolumeExpansion: true` в StorageClass: поле меняется на лету, после этого расширяются и уже существующие PVC |
 | Забытые тома в счёте | `reclaimPolicy: Retain` и удалённые namespace | `aws ec2 describe-volumes --filters Name=status,Values=available` |
 
 ### Практика
@@ -2355,7 +2534,7 @@ velero restore create --from-backup prod-daily
 | Способ | Как работает | Статус |
 |---|---|---|
 | **Роль узла (instance profile)** | Pod через IMDS берёт креденшелы узла | **Антипаттерн**: любой pod получает все права узла |
-| **IRSA** (IAM Roles for Service Accounts) | OIDC-провайдер кластера, `AssumeRoleWithWebIdentity`, аннотация на ServiceAccount | Работает, зрелый, нужен для кросс-аккаунтных сценариев |
+| **IRSA** (IAM Roles for Service Accounts) | OIDC-провайдер кластера, `AssumeRoleWithWebIdentity`, аннотация на ServiceAccount | Работает, зрелый; нужен для Fargate, кластеров вне EKS и старых SDK |
 | **EKS Pod Identity** | Агент-DaemonSet и association на уровне EKS API | **Рекомендуемый по умолчанию** с 2023 года |
 
 ## 10.2 EKS Pod Identity: современный путь
@@ -2405,7 +2584,7 @@ metadata:
 
 ```bash
 kubectl -n demo run aws-cli --rm -it --image=public.ecr.aws/aws-cli/aws-cli \
-  --overrides='{"spec":{"serviceAccountName":"app-sa"}}' -- sts get-caller-identity
+  --overrides='{"apiVersion":"v1","spec":{"serviceAccountName":"app-sa"}}' -- sts get-caller-identity
 ```
 
 Почему Pod Identity лучше IRSA:
@@ -2413,8 +2592,9 @@ kubectl -n demo run aws-cli --rm -it --image=public.ecr.aws/aws-cli/aws-cli \
 - одна роль работает в **нескольких кластерах**, не нужно перечислять OIDC-issuer в trust policy;
 - не нужен OIDC-провайдер и его ARN в каждой роли;
 - нет аннотаций на ServiceAccount: связь живёт в EKS API и видна через `aws eks list-pod-identity-associations`;
-- поддерживает **session policies** — можно сузить права конкретной связи без создания новой роли;
-- session tags: в политиках доступны `eks-cluster-name`, `kubernetes-namespace`, `kubernetes-service-account`.
+- поддерживает **session policies** (параметр `policy` у association) — можно сузить права конкретной связи без создания новой роли; session tags для такой связи нужно отключить (`disableSessionTags`);
+- session tags: в политиках доступны `eks-cluster-name`, `kubernetes-namespace`, `kubernetes-service-account`;
+- **кросс-аккаунтный доступ** без кода в приложении: в association указывается целевая роль в другом аккаунте (пример ниже).
 
 ```json
 {
@@ -2428,6 +2608,15 @@ kubectl -n demo run aws-cli --rm -it --image=public.ecr.aws/aws-cli/aws-cli \
     }
   }]
 }
+```
+
+Кросс-аккаунтный доступ Pod Identity тоже делает сам: в association указывается целевая роль в другом аккаунте, и агент выполняет role chaining. Роль из аккаунта кластера получает права `sts:AssumeRole` и `sts:TagSession` на целевую роль, а trust policy целевой роли доверяет ей (для защиты можно добавить условие на `sts:ExternalId`, его значение возвращает association):
+
+```bash
+aws eks create-pod-identity-association --cluster-name demo \
+  --namespace demo --service-account reporter \
+  --role-arn arn:aws:iam::111122223333:role/ReporterRole \
+  --target-role-arn arn:aws:iam::444455556666:role/DataReader
 ```
 
 ## 10.3 IRSA: когда всё ещё нужен
@@ -2466,7 +2655,7 @@ Trust policy IRSA привязана к конкретному OIDC-провай
 }
 ```
 
-IRSA остаётся нужен: для Fargate-pod (там Pod Identity Agent как DaemonSet не запустить), для доступа из кластера в **другой AWS-аккаунт** и для совместимости со старыми чартами.
+IRSA остаётся нужен: для Fargate-pod (там Pod Identity Agent как DaemonSet не запустить), для Kubernetes-кластеров вне EKS и для приложений и чартов на старых версиях AWS SDK, которые не умеют получать креденшелы Pod Identity. Кросс-аккаунтный доступ Pod Identity с 2025 года умеет сам (см. 10.2).
 
 ## 10.4 Блокируем доступ pod к роли узла
 
@@ -2492,15 +2681,20 @@ kubectl run t --rm -it --image=curlimages/curl -- \
 
 | Вариант | Плюсы | Минусы |
 |---|---|---|
-| Kubernetes Secret | Просто, работает везде | base64, не шифрование; лежит в etcd; в Git попадать не должен |
+| Kubernetes Secret | Просто, работает везде | В манифесте это base64, а не шифрование; в Git попадать не должен; хранится в etcd (в EKS — зашифрованным) |
 | **Secrets Store CSI + AWS provider** | Секрет монтируется файлом, ротация, ничего в etcd | Нужен драйвер, приложение читает файл |
 | **External Secrets Operator** | Секреты из Secrets Manager/SSM синхронизируются в K8s Secret | Секрет всё же появляется в etcd |
 | Переменные окружения из Secrets Manager в коде | Полный контроль | Нужна библиотека AWS SDK в приложении |
 
-Включи шифрование etcd своим KMS-ключом (envelope encryption) при создании кластера:
+С 2025 года EKS (1.28+) по умолчанию шифрует все данные Kubernetes API в etcd envelope-шифрованием ключом, которым владеет AWS. Если нужен свой ключ (контроль доступа к нему, аудит в CloudTrail, возможность отозвать), подключи KMS-ключ при создании кластера или позже: EKS будет использовать его для всех данных API, а не только для Secret. Отключить такое шифрование потом нельзя.
 
 ```bash
+# новый кластер
 aws eks create-cluster ... \
+  --encryption-config '[{"resources":["secrets"],"provider":{"keyArn":"arn:aws:kms:eu-central-1:111122223333:key/xxxx"}}]'
+
+# существующий кластер
+aws eks associate-encryption-config --cluster-name demo \
   --encryption-config '[{"resources":["secrets"],"provider":{"keyArn":"arn:aws:kms:eu-central-1:111122223333:key/xxxx"}}]'
 ```
 
@@ -2548,7 +2742,7 @@ spec:
 **External Secrets Operator:**
 
 ```yaml
-apiVersion: external-secrets.io/v1beta1
+apiVersion: external-secrets.io/v1
 kind: SecretStore
 metadata: { name: aws-sm, namespace: demo }
 spec:
@@ -2556,11 +2750,11 @@ spec:
     aws:
       service: SecretsManager
       region: eu-central-1
-      auth:
-        jwt:
+      auth:                           # jwt — для IRSA (роль в аннотации eso-sa); без блока auth ESO
+        jwt:                          # возьмёт креды собственного ServiceAccount (например, через Pod Identity)
           serviceAccountRef: { name: eso-sa }
 ---
-apiVersion: external-secrets.io/v1beta1
+apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata: { name: db, namespace: demo }
 spec:
@@ -2571,6 +2765,8 @@ spec:
     - secretKey: password
       remoteRef: { key: prod/db/credentials, property: password }
 ```
+
+Актуальные версии ESO больше не обслуживают API `v1beta1`, поэтому во всех манифестах только `external-secrets.io/v1`.
 
 ## 10.6 Чек-лист доступа к AWS
 
@@ -2626,13 +2822,17 @@ aws eks describe-addon --cluster-name demo --addon-name vpc-cni
 ## 11.2 Установка и конфигурация
 
 ```bash
+# версию по умолчанию для своей версии кластера спрашиваем у EKS, а не копируем из статей
+VPC_CNI_VERSION=$(aws eks describe-addon-versions --kubernetes-version 1.36 --addon-name vpc-cni \
+  --query 'addons[0].addonVersions[?compatibilities[0].defaultVersion==`true`].addonVersion' --output text)
+
 aws eks create-addon --cluster-name demo --addon-name vpc-cni \
-  --addon-version v1.20.0-eksbuild.1 \
+  --addon-version "$VPC_CNI_VERSION" \
   --resolve-conflicts OVERWRITE \
   --pod-identity-associations 'serviceAccount=aws-node,roleArn=arn:aws:iam::111122223333:role/VpcCniRole'
 ```
 
-Конфигурация аддона задаётся JSON, а не `kubectl set env` (иначе обновление аддона перезапишет твои правки):
+Конфигурация аддона задаётся JSON, а не `kubectl set env` (иначе обновление аддона перезапишет твои правки). Держи всю конфигурацию аддона в одном JSON (лучше в Git или Terraform) и передавай её целиком при каждом обновлении. Network policy включается ключом верхнего уровня `enableNetworkPolicy`, а не переменной в `env`; для `ClusterNetworkPolicy` (7.7) нужен VPC CNI v1.21.1+:
 
 ```bash
 aws eks update-addon --cluster-name demo --addon-name vpc-cni \
@@ -2640,9 +2840,9 @@ aws eks update-addon --cluster-name demo --addon-name vpc-cni \
     "env": {
       "ENABLE_PREFIX_DELEGATION": "true",
       "WARM_PREFIX_TARGET": "1",
-      "ENABLE_POD_ENI": "true",
-      "ENABLE_NETWORK_POLICY": "true"
+      "ENABLE_POD_ENI": "true"
     },
+    "enableNetworkPolicy": "true",
     "nodeAgent": { "enablePolicyEventLogs": "true" }
   }' \
   --resolve-conflicts PRESERVE
@@ -2651,7 +2851,7 @@ aws eks update-addon --cluster-name demo --addon-name vpc-cni \
 ```bash
 # посмотреть допустимую схему конфигурации
 aws eks describe-addon-configuration --addon-name vpc-cni \
-  --addon-version v1.20.0-eksbuild.1 --query configurationSchema --output text | jq .
+  --addon-version "$VPC_CNI_VERSION" --query configurationSchema --output text | jq .
 ```
 
 `--resolve-conflicts`:
@@ -2672,15 +2872,18 @@ aws eks describe-addon-configuration --addon-name vpc-cni \
 4. Проверить приложения
 ```
 
-`kube-proxy` должен быть не новее control plane и не старше узлов на два минора. `vpc-cni` обновляй до узлов: новая версия CNI на старом ядре обычно нормальна, старая CNI на новых узлах — нет.
+`kube-proxy` не может быть новее control plane и не должен отставать от него больше чем на три минора; на практике держи его на версии кластера. `vpc-cni` обновляй до узлов: новая версия CNI на старом ядре обычно нормальна, старая CNI на новых узлах — нет.
 
 ```bash
 # какие версии совместимы
 aws eks describe-addon-versions --kubernetes-version 1.36 --addon-name coredns \
   --query 'addons[].addonVersions[].{v:addonVersion,default:compatibilities[0].defaultVersion}'
 
+COREDNS_VERSION=$(aws eks describe-addon-versions --kubernetes-version 1.36 --addon-name coredns \
+  --query 'addons[0].addonVersions[?compatibilities[0].defaultVersion==`true`].addonVersion' --output text)
+
 aws eks update-addon --cluster-name demo --addon-name coredns \
-  --addon-version v1.12.4-eksbuild.1 --resolve-conflicts PRESERVE
+  --addon-version "$COREDNS_VERSION" --resolve-conflicts PRESERVE
 
 aws eks wait addon-active --cluster-name demo --addon-name coredns
 ```
@@ -2709,23 +2912,30 @@ aws eks wait addon-active --cluster-name demo --addon-name coredns
 ## 11.6 Terraform для аддонов
 
 ```hcl
+# если vpc-cni уже описан в addons модуля EKS, задавай configuration_values там, а не отдельным ресурсом
+data "aws_eks_addon_version" "vpc_cni" {
+  addon_name         = "vpc-cni"
+  kubernetes_version = module.eks.cluster_version
+  most_recent        = false          # версия по умолчанию для этой версии кластера
+}
+
 resource "aws_eks_addon" "vpc_cni" {
-  cluster_name             = module.eks.cluster_name
-  addon_name               = "vpc-cni"
-  addon_version            = "v1.20.0-eksbuild.1"
+  cluster_name                = module.eks.cluster_name
+  addon_name                  = "vpc-cni"
+  addon_version               = data.aws_eks_addon_version.vpc_cni.version
   resolve_conflicts_on_update = "PRESERVE"
 
   configuration_values = jsonencode({
     env = {
       ENABLE_PREFIX_DELEGATION = "true"
       WARM_PREFIX_TARGET       = "1"
-      ENABLE_NETWORK_POLICY    = "true"
     }
+    enableNetworkPolicy = "true"
   })
 }
 ```
 
-Фиксируй версии аддонов явно (`addon_version`), а не `most_recent = true`, если хочешь предсказуемых апгрейдов в проде.
+Для предсказуемых апгрейдов в проде фиксируй версию литералом в `addon_version` (подсмотрев её через `describe-addon-versions` или этот data source), а не `most_recent = true`: версия по умолчанию тоже меняется со временем.
 
 ### Вопросы для самопроверки
 
@@ -2832,7 +3042,7 @@ helm install kps prometheus-community/kube-prometheus-stack -n monitoring --crea
 | Заполнение диска узла | `node_filesystem_avail_bytes / node_filesystem_size_bytes < 0.15` | `DiskPressure` и вытеснение pod |
 | Ошибки apiserver 5xx | `apiserver_request_total{code=~"5.."}` растёт | Проблемы control plane или webhook |
 | Задержка etcd / apiserver | `apiserver_request_duration_seconds` p99 | Перегруженный control plane |
-| HPA на максимуме | `kube_horizontalpodautoscaler_status_current_replicas == spec_max_replicas` | Нагрузка выше расчётной |
+| HPA на максимуме | `kube_horizontalpodautoscaler_status_current_replicas == kube_horizontalpodautoscaler_spec_max_replicas` | Нагрузка выше расчётной |
 | Приближение конца поддержки версии | EKS Health event | $0.60/час вместо $0.10 |
 | Сертификат ACM истекает | CloudWatch по ACM | Падение HTTPS |
 | Просроченный `expireAfter` узлов не работает | Возраст узла > лимита | Патчи ОС не применяются |
@@ -2841,6 +3051,7 @@ helm install kps prometheus-community/kube-prometheus-stack -n monitoring --crea
 ## 12.6 Трейсы через OpenTelemetry
 
 ```bash
+# аддону ADOT нужен уже установленный cert-manager (для вебхуков оператора)
 aws eks create-addon --cluster-name demo --addon-name adot
 ```
 
@@ -2850,18 +3061,25 @@ kind: OpenTelemetryCollector
 metadata: { name: otel, namespace: observability }
 spec:
   mode: deployment
+  serviceAccount: adot-collector      # роль с правами на X-Ray и AMP выдай через Pod Identity
   config:
     receivers:
       otlp:
         protocols: { grpc: {}, http: {} }
     processors:
       batch: {}
+    extensions:
+      sigv4auth:                      # подпись запросов к AMP
+        region: eu-central-1
+        service: aps
     exporters:
-      awsxray: {}
+      awsxray:
+        region: eu-central-1          # при hopLimit: 1 регион из IMDS не получить
       prometheusremotewrite:
         endpoint: "https://aps-workspaces.eu-central-1.amazonaws.com/workspaces/ws-xxxx/api/v1/remote_write"
         auth: { authenticator: sigv4auth }
     service:
+      extensions: [sigv4auth]
       pipelines:
         traces:  { receivers: [otlp], processors: [batch], exporters: [awsxray] }
         metrics: { receivers: [otlp], processors: [batch], exporters: [prometheusremotewrite] }
@@ -2952,7 +3170,9 @@ kubectl label namespace prod \
 |---|---|
 | `privileged` | Всё (только для системных namespace) |
 | `baseline` | Запрещены явно опасные вещи: privileged, hostNetwork, hostPID |
-| `restricted` | Плюс обязательны non-root, `readOnlyRootFilesystem`, drop capabilities, seccomp |
+| `restricted` | Всё из baseline плюс обязательны non-root, `allowPrivilegeEscalation: false`, drop ALL capabilities (вернуть можно только `NET_BIND_SERVICE`), seccomp `RuntimeDefault` или `Localhost`, ограниченный набор типов томов |
+
+`readOnlyRootFilesystem` в стандарт не входит: это хорошая практика, но PSS её не проверяет. Если хочешь её требовать, делай это политикой Kyverno или Gatekeeper (13.3).
 
 Pod, который проходит `restricted`:
 
@@ -2988,13 +3208,13 @@ apiVersion: kyverno.io/v1
 kind: ClusterPolicy
 metadata: { name: require-ecr-images }
 spec:
-  validationFailureAction: Enforce
   rules:
     - name: only-our-registry
       match:
         any:
           - resources: { kinds: ["Pod"] }
       validate:
+        failureAction: Enforce        # раньше задавалось spec.validationFailureAction (устарело)
         message: "Образы только из нашего ECR"
         pattern:
           spec:
@@ -3005,11 +3225,11 @@ apiVersion: kyverno.io/v1
 kind: ClusterPolicy
 metadata: { name: require-requests }
 spec:
-  validationFailureAction: Audit
   rules:
     - name: resources-required
       match: { any: [{ resources: { kinds: ["Pod"] } }] }
       validate:
+        failureAction: Audit
         message: "Нужны requests.cpu и requests.memory"
         pattern:
           spec:
@@ -3094,7 +3314,8 @@ spec:
     requests.memory: 100Gi
     limits.memory: 200Gi
     persistentvolumeclaims: "20"
-    count/services.loadbalancers: "2"
+    services.loadbalancers: "2"              # NLB через Service type=LoadBalancer
+    count/ingresses.networking.k8s.io: "5"   # ALB создаются из Ingress (с group.name несколько Ingress делят один ALB)
     pods: "200"
 ---
 apiVersion: v1
@@ -3185,9 +3406,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: arn:aws:iam::111122223333:role/GitHubActionsECRPush
           aws-region: eu-central-1
@@ -3195,14 +3416,19 @@ jobs:
       - uses: aws-actions/amazon-ecr-login@v2
         id: ecr
 
-      - name: Build and push
+      - uses: docker/setup-qemu-action@v4     # эмуляция arm64 для multi-arch сборки
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build and push (amd64 + arm64)
         run: |
           IMAGE=${{ steps.ecr.outputs.registry }}/app:${GITHUB_SHA::7}
-          docker build -t $IMAGE .
-          docker push $IMAGE
+          docker buildx build --platform linux/amd64,linux/arm64 -t $IMAGE --push .
           echo "IMAGE=$IMAGE" >> $GITHUB_ENV
 
-      - name: Bump tag in GitOps repo
+      # тег меняется в этом же репозитории; для отдельного GitOps-репозитория сделай
+      # его checkout со своим токеном или deploy key. Push через GITHUB_TOKEN не
+      # запускает workflow повторно, так что цикла не будет.
+      - name: Bump image tag
         run: |
           yq -i ".image.tag = \"${GITHUB_SHA::7}\"" deploy/prod/values.yaml
           git config user.name ci && git config user.email ci@example.com
@@ -3502,8 +3728,8 @@ kubectl version
 | Старые Helm-чарты | Используют удалённые kinds | `helm template \| kubectl apply --dry-run=server` |
 | Ingress-NGINX | Снят с поддержки в марте 2026 | Миграция на Gateway API / ALB |
 | AL2 AMI | Не выпускаются с 1.33 | Перейти на AL2023 или Bottlerocket |
-| cgroup v1 | kubelet не стартует с 1.35 | Проверить кастомные AMI |
-| IPVS в kube-proxy | Удалён в 1.36 | Переключиться на iptables/nftables |
+| cgroup v1 | С 1.35 kubelet по умолчанию не стартует на cgroup v1 (`failCgroupV1: true`) | Проверить кастомные AMI: AL2023 и Bottlerocket уже на cgroup v2 |
+| IPVS в kube-proxy | Deprecated с 1.35; по плану KEP-5495 выключается по умолчанию в 1.40 и удаляется в 1.43 | Переходить на iptables или nftables заранее (аддон kube-proxy в EKS по умолчанию работает в iptables) |
 | Свои admission-webhook | Не знают новых версий API | Обновить, проверить `failurePolicy` |
 | Операторы (Postgres, Kafka) | Отстают от версий Kubernetes | Обновить оператор ДО кластера |
 | PDB, которые блокируют drain | `minAvailable` = числу реплик | Проверить `kubectl get pdb -A` |
@@ -3617,10 +3843,14 @@ helm install opencost opencost/opencost -n opencost --create-namespace
 aws ec2 describe-volumes --filters Name=status,Values=available \
   --query 'Volumes[].{id:VolumeId,size:Size,az:AvailabilityZone}' --output table
 
-# балансировщики без целей
+# балансировщики без зарегистрированных целей
 for lb in $(aws elbv2 describe-load-balancers --query 'LoadBalancers[].LoadBalancerArn' --output text); do
-  aws elbv2 describe-target-groups --load-balancer-arn $lb --query 'TargetGroups[].TargetGroupName' --output text | \
-    xargs -r -n1 echo "$lb"
+  targets=0
+  for tg in $(aws elbv2 describe-target-groups --load-balancer-arn "$lb" --query 'TargetGroups[].TargetGroupArn' --output text); do
+    n=$(aws elbv2 describe-target-health --target-group-arn "$tg" --query 'length(TargetHealthDescriptions)' --output text)
+    targets=$((targets + n))
+  done
+  [ "$targets" -eq 0 ] && echo "без целей: $lb"
 done
 
 # незанятые Elastic IP
@@ -3650,7 +3880,7 @@ aws budgets create-budget --account-id 111122223333 --budget '{
 ## 16.6 Антипаттерны стоимости
 
 - **Кластер на каждый сервис.** Пять сервисов — пять кластеров — $365/мес только control plane.
-- **Dev-кластеры 24/7.** Гаси узлы по расписанию: `eksctl scale nodegroup --nodes 0` ночью и на выходных (или KEDA cron + Karpenter).
+- **Dev-кластеры 24/7.** Гаси узлы по расписанию: `eksctl scale nodegroup --cluster demo --name ng-general --nodes 0 --nodes-min 0` ночью и на выходных (или KEDA cron + Karpenter).
 - **`requests` «с запасом ×5»** без измерения.
 - **Логи всё-в-CloudWatch без фильтров.** Debug-логи в CloudWatch на 1000 pod могут стоить больше узлов.
 - **Отдельный ALB на каждый Ingress.**
@@ -4063,8 +4293,8 @@ kubectl -n apps exec deploy/web -- curl -s --max-time 3 http://169.254.169.254/l
 # ожидаем: таймаут
 
 # 5. восстановление
-velero restore create check --from-backup $(velero backup get -o name | head -1) \
-  --namespace-mappings apps:apps-restore
+velero restore create check --from-schedule daily-apps \
+  --namespace-mappings apps:apps-restore      # daily-apps — имя твоего расписания, берётся его последний бэкап
 kubectl -n apps-restore get pods,pvc
 
 # 6. стоимость
@@ -4278,7 +4508,7 @@ readiness gate на namespace: elbv2.k8s.aws/pod-readiness-gate-inject=enabled
 **StorageClass (EBS):**
 
 ```
-provisioner: ebs.csi.aws.com
+provisioner: ebs.csi.aws.com                # в Auto Mode: ebs.csi.eks.amazonaws.com
 volumeBindingMode: WaitForFirstConsumer     # обязательно
 allowVolumeExpansion: true
 type: gp3, iops: 3000, throughput: 125, encrypted: true
@@ -4288,10 +4518,10 @@ reclaimPolicy: Retain для прод-данных
 **VPC CNI:**
 
 ```
-ENABLE_PREFIX_DELEGATION: true     # включай на новом кластере
-WARM_PREFIX_TARGET: 1
-ENABLE_NETWORK_POLICY: true
-ENABLE_POD_ENI: только если нужны security groups for pods
+env.ENABLE_PREFIX_DELEGATION: true     # включай на новом кластере
+env.WARM_PREFIX_TARGET: 1
+enableNetworkPolicy: "true"           # ключ верхнего уровня конфигурации аддона, не env
+env.ENABLE_POD_ENI: только если нужны security groups for pods
 ```
 
 ---
@@ -4348,7 +4578,7 @@ ENABLE_POD_ENI: только если нужны security groups for pods
 12. **Как посчитать максимум pod на узел и как его увеличить?** `(ENI × (IP на ENI − 1)) + 2`; увеличивается prefix delegation (`m6i.large`: с 29 до 110).
 13. **Что делать, когда в подсети кончились IP?** Prefix delegation, secondary CIDR с custom networking, IPv6-кластер, уменьшение warm-таргетов, в крайнем случае другой CNI.
 14. **Чем access entries лучше `aws-auth`?** Это API EKS: версионируется в IaC, нет риска сломать доступ всем одной опечаткой в ConfigMap, есть готовые access policies и scope на namespace.
-15. **Pod Identity или IRSA?** Pod Identity по умолчанию: одна роль для многих кластеров, без OIDC в trust policy, без аннотаций, с session policies и tags. IRSA — для Fargate и кросс-аккаунтного доступа.
+15. **Pod Identity или IRSA?** Pod Identity по умолчанию: одна роль для многих кластеров, без OIDC в trust policy, без аннотаций, с session tags (или session policy), кросс-аккаунт через target role. IRSA — для Fargate, кластеров вне EKS и старых SDK.
 16. **Как запретить pod пользоваться ролью узла?** IMDSv2 (`httpTokens: required`) и `httpPutResponseHopLimit: 1`, плюс собственные роли через Pod Identity.
 17. **Чем Karpenter лучше Cluster Autoscaler?** Создаёт инстансы напрямую и подбирает тип под pod, работает за десятки секунд, консолидирует нагрузку, нативно дружит со Spot, конфигурируется 1-2 NodePool вместо десятков node group.
 18. **Почему Karpenter «не экономит»?** Он планирует по `requests`. Завышенные requests — это купленное железо, которое не используется.
@@ -4359,8 +4589,8 @@ ENABLE_POD_ENI: только если нужны security groups for pods
 23. **Когда EFS вместо EBS?** Когда нужен ReadWriteMany из нескольких pod и AZ; цена и задержка выше.
 24. **Зачем PodDisruptionBudget?** Он ограничивает добровольные вытеснения: обновление node group, консолидацию Karpenter, замену узлов, drain при Spot-прерывании.
 25. **Что делает `topologySpreadConstraints` с `DoNotSchedule` по зонам?** Заставляет раскладывать реплики по AZ, чтобы отказ одной зоны не уносил весь сервис.
-26. **Чем HPA отличается от KEDA?** HPA масштабирует по CPU/памяти и кастомным метрикам и не умеет в ноль; KEDA масштабирует по внешним событиям (SQS, Kafka, Prometheus) и умеет scale-to-zero.
-27. **Как включить network policy без сторонних CNI?** `ENABLE_NETWORK_POLICY=true` у VPC CNI; с 2026 года есть ещё Admin Policies уровня кластера.
+26. **Чем HPA отличается от KEDA?** HPA масштабирует по CPU/памяти и кастомным метрикам; в ноль он умеет только за feature gate (с 1.37 это beta, включено по умолчанию и работает по Object/External-метрикам). KEDA из коробки масштабирует по внешним событиям (SQS, Kafka, Prometheus) и умеет scale-to-zero.
+27. **Как включить network policy без сторонних CNI?** Ключом `enableNetworkPolicy: "true"` в конфигурации аддона VPC CNI; с декабря 2025 года есть ещё `ClusterNetworkPolicy` (Admin Policies) уровня кластера.
 28. **Что такое EKS add-on и чем отличается от Helm-установки?** Версией управляет EKS API, AWS отвечает за совместимость и CVE; конфигурация задаётся `configuration-values`, а ручные правки могут быть перезаписаны при `OVERWRITE`.
 29. **Какие логи control plane включать и почему?** `api`, `audit`, `authenticator` обязательно: без них невозможно разобрать инцидент и понять, кто что удалил.
 30. **Что происходит с работающими pod, если control plane недоступен?** Они продолжают работать: kubelet держит контейнеры, kube-proxy — правила, ALB — трафик. Ломается управление: деплои, автоскейлинг, пересоздание pod.
@@ -4410,10 +4640,10 @@ ENABLE_POD_ENI: только если нужны security groups for pods
 Нет. Используй access entries и режим `API`. В старых кластерах `aws-auth` ещё встречается, но это legacy.
 
 **Можно ли дать доступ к кластеру без IAM?**
-Нет: аутентификация в EKS идёт через IAM (или через OIDC-провайдера кластера для сервисных токенов). Людям доступ выдают через SSO-роли.
+Да: к кластеру можно подключить внешний OIDC identity provider (Okta, Keycloak, Dex и т. п.) командой `aws eks associate-identity-provider-config`. Пользователи входят токенами этого провайдера, а права получают через RBAC по группам из токена. Но в AWS проще и привычнее SSO-роли из IAM Identity Center плюс access entries.
 
 **Где хранить секреты?**
-В AWS Secrets Manager или SSM Parameter Store, монтируя через Secrets Store CSI или синхронизируя через External Secrets. Kubernetes Secret включай в KMS-шифрование etcd и никогда не держи в Git.
+В AWS Secrets Manager или SSM Parameter Store, монтируя через Secrets Store CSI или синхронизируя через External Secrets. Kubernetes Secret в etcd EKS и так шифрует ключом AWS; если нужен контроль над ключом, подключи свой KMS-ключ. В Git секреты не держи никогда.
 
 **Надо ли держать базу в кластере?**
 Обычно нет: RDS/Aurora дешевле по совокупным затратам и надёжнее без выделенной команды. В кластере держат БД, когда есть зрелый оператор и люди, которые умеют восстанавливать данные.
@@ -4425,7 +4655,7 @@ ENABLE_POD_ENI: только если нужны security groups for pods
 Нет. Кластер создаётся в конкретном VPC и регионе. «Перенос» — это новый кластер и миграция нагрузки (что как раз хорошо получается при GitOps).
 
 **Можно ли поменять подсети существующего кластера?**
-Добавить подсети для узлов можно; сменить набор подсетей control plane — нет. Планируй адресацию заранее.
+Да, с октября 2023 года: `aws eks update-cluster-config --resources-vpc-config subnetIds=...,securityGroupIds=...` (или `eksctl utils update-cluster-vpc-config`). Ограничения: VPC остаётся тем же, а новые подсети должны покрывать тот же набор AZ, что при создании. Узлы и так могут жить в любых подсетях VPC. Адресацию всё равно планируй заранее.
 
 **Работает ли EKS с on-prem?**
 Да: **EKS Hybrid Nodes** подключают твои серверы (или edge-железо) к control plane в AWS, оплата за vCPU. Есть также EKS Anywhere для полностью локальных кластеров.
@@ -4460,7 +4690,7 @@ ENABLE_POD_ENI: только если нужны security groups for pods
 | **authenticationMode** | `CONFIG_MAP`, `API_AND_CONFIG_MAP` или `API` |
 | **IRSA** | IAM Roles for Service Accounts через OIDC-провайдер кластера |
 | **EKS Pod Identity** | Современный способ выдать pod IAM-роль, через агент и association |
-| **Session policy** | Сужение прав конкретной Pod Identity association без новой роли |
+| **Session policy** | Сужение прав конкретной Pod Identity association без новой роли (session tags при этом отключаются) |
 | **Managed node group** | Группа узлов, которой управляет EKS (ASG + drain + health) |
 | **Self-managed node** | Узел в твоей ASG, который ты сам регистрируешь и патчишь |
 | **Fargate profile** | Правило, по которому pod из namespace/меток попадают на Fargate |
@@ -4485,10 +4715,10 @@ ENABLE_POD_ENI: только если нужны security groups for pods
 | **VolumeSnapshot** | Снапшот PV через CSI |
 | **PSS (Pod Security Standards)** | Уровни `privileged`, `baseline`, `restricted` на namespace |
 | **NetworkPolicy** | Правила сетевого доступа между pod |
-| **Admin Policy** | Сетевая политика уровня кластера, приоритетнее пользовательских |
+| **Admin Policy** | `ClusterNetworkPolicy` уровня Admin: сетевая политика уровня кластера, приоритетнее пользовательских NetworkPolicy |
 | **EKS add-on** | Компонент, версией которого управляет EKS API |
 | **EKS Capabilities** | Управляемые платформенные компоненты (Argo CD, ACK, kro) |
-| **Provisioned Control Plane** | Предоплаченные тиры производительности control plane (XL...8XL), SLA 99.99% |
+| **Provisioned Control Plane** | Заранее выделенная ёмкость control plane по тирам (XL...8XL), SLA 99.99% |
 | **EKS Hybrid Nodes** | Узлы вне AWS под управлением control plane EKS |
 | **Cluster insights** | Автоматические проверки готовности к апгрейду |
 | **Standard / Extended support** | 14 месяцев по $0.10/час и ещё 12 по $0.60/час |
@@ -4509,7 +4739,7 @@ ENABLE_POD_ENI: только если нужны security groups for pods
 - **Цены EKS** — https://aws.amazon.com/eks/pricing/
 - **EKS Workshop** (лучший практикум от AWS) — https://www.eksworkshop.com
 - **eksctl** — https://eksctl.io
-- **Terraform EKS module** — https://github.com/terraform-aws-modules/terraform-eks
+- **Terraform EKS module** — https://github.com/terraform-aws-modules/terraform-aws-eks
 - **EKS Blueprints** — https://github.com/aws-ia/terraform-aws-eks-blueprints
 - **Karpenter** — https://karpenter.sh
 - **AWS Load Balancer Controller** — https://kubernetes-sigs.github.io/aws-load-balancer-controller/
